@@ -1,4 +1,4 @@
-# # Medicaid Claims Analytics — Snowflake Data Warehouse
+## Medicaid Claims Analytics
 
 ## 📊 Data Sources
 
@@ -6,16 +6,29 @@
 [![HCPCS Level II](https://img.shields.io/badge/CMS-HCPCS%20Level%20II-purple)](https://www.cms.gov/medicare/coding/hcpcs-release-code-sets)
 [![NPI Registry](https://img.shields.io/badge/CMS-NPI%20Registry-green)](https://download.cms.gov/nppes/NPI_Files.html)
 
+## 📘 Project Overview
+Medicaid Claims Analytics is a full end‑to‑end healthcare analytics project built on Snowflake and Power BI, designed to process, model, and visualize large‑scale public healthcare datasets.
+The project integrates three federal data sources — Medicaid Provider Spending, HCPCS Level II, and the NPPES NPI Registry — into a unified analytics environment using a clean RAW → STAGE → MODEL warehouse architecture.
 
-This project builds a healthcare data warehouse using real provider-level
-Medicaid claims data from HHS Open Data. The pipeline ingests three source
-datasets into Snowflake and transforms them through a three-layer architecture
-(RAW → STAGE → MODEL), building toward a Power BI analytics dashboard.
+The pipeline includes:
+- Automated ingestion of multi‑GB public datasets using Snowflake internal stages
+- RAW layer storage of Medicaid, HCPCS, and NPI data
+- STAGE layer cleaning, typing, and analytics‑ready transformations
+- MODEL layer star schema with:
+- FACT_PROVIDER_SPENDING
+- DIM_PROVIDER
+- DIM_HCPCS
+- DATE_DIM
+- SERVICE_CATEGORY_DIM
+- Geographic standardization (U.S. state extraction from messy NPI fields)
+- Power BI dashboard for provider performance, utilization, cost trends, and geographic insights
+
+This repository includes all documentation, SQL scripts, data modeling logic, and architecture diagrams needed to reproduce the full solution.
 
 ## 🚀 Project Status
 
-| Phase           | Status |
-| --------------- | ------ |
+| Phase           | Status             |
+| --------------- | ------------------ |
 | RAW ingestion (3 source datasets) | ✅ Complete |
 | STAGE layer (cleaned + typed) | ✅ Complete |
 | Dimension tables (NPI_DIM, HCPCS_DIM) | ✅ Complete |
