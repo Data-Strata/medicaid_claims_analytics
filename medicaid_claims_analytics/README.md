@@ -84,13 +84,17 @@ NPI_RAW (330 cols)       →   NPI_CLEAN (11 cols)           →   NPI_DIM (1 ro
 
 HCPCS_RAW_WIDE (48 cols) →   HCPCS_CLEAN (6 cols)          →   HCPCS_DIM (1 row per code)
 ```
+
 All three pipelines follow the same pattern: manual `CREATE TABLE` (all STRING) → `COPY INTO` → typed CLEAN → deduplicated DIM/FACT.
+
 Medicaid and HCPCS use `@MEDICAID_EXTRACTED`; NPI uses its own dedicated `@NPI_EXTRACTED` stage.
+
 The NPI Registry is extracted into its own stage (`NPI_EXTRACTED`) because the NPPES file is significantly larger and far more schema‑sensitive than the Medicaid and HCPCS datasets. 
+
 Keeping NPI isolated prevents schema inference conflicts during ingestion, while Medicaid and HCPCS safely share `MEDICAID_EXTRACTED` due to their smaller, stable, and compatible file structures.
 
 ## Project Structure
-
+```code
 medicaid_claims_analytics/
 │
 ├── README.md
@@ -147,7 +151,7 @@ medicaid_claims_analytics/
     ├── ingestion_diagram.png
     ├── data_model.png
     └── dashboard_screenshots/            # (planned)
-
+```
 ---
 
 ## 🧪 SQL Scripts
@@ -185,12 +189,14 @@ medicaid_claims_analytics/
 | ``clean_provider_states.sql``       | Standardizes PRACTICE_STATE and MAILING_STATE into U.S. states |
 | ``date_and_service_dimensions.sql`` | Creates DATE_DIM and SERVICE_DIM for BI semantic modeling      |
 
-🟦 Provider Data Quality Analysis (NPI Integration)
+# 🟦 Provider Data Quality Analysis (NPI Integration)
+
 A detailed technical appendix analyzing the 96.69% NPI match rate, unmatched provider categories, anomaly patterns, and Medicaid‑specific billing behaviors is available in the documentation folder:
+
 👉 docs\09_NPI_data_quality_analysis.md (Includes unmatched NPI categories, anomaly tables, SQL diagnostics, and a full narrative.)
 
 ## 🧱 MODEL Layer Summary
-
+```code
 | Table                             | Grain                                                 | Source                                  |
 |-----------------------------------|-------------------------------------------------------|-----------------------------------------|
 | `NPI_DIM`                         | 1 row per NPI                                         | NPI_CLEAN (deduplicated via MAX + JOIN) |
@@ -198,17 +204,19 @@ A detailed technical appendix analyzing the 96.69% NPI match rate, unmatched pro
 | `FACT_MEDICAID_PROVIDER_SPENDING` | 1 row per billing NPI + servicing NPI + HCPCS + month | MEDICAID_PROVIDER_SPENDING_STAGE        |
 | ``DATE_DIM``                      | 1 row per date                                        | Supports time intelligence              |
 | ``SERVICE_CATEGORY_DIM``          | 1 row per category                                    | Groups HCPCS codes into clinical categories |
-
+```
 ## 🧊 Clustering Strategy (MODEL Layer)
 Clustering keys are applied to all MODEL-layer tables for query performance and reduce scan cost:
-
+```code
 | Table                             | Clustering Key                                   |
 |-----------------------------------|--------------------------------------------------|
 | `NPI_DIM`                         | `CLUSTER BY (NPI)`                               |
 | `HCPCS_DIM`                       | `CLUSTER BY (HCPCS_CODE)`                        |
 | `FACT_MEDICAID_PROVIDER_SPENDING` | `CLUSTER BY (CLAIM_MONTH, BILLING_PROVIDER_NPI)` |
+```
 
 📌Clustering Strategy (MODEL Layer)
+
 The analytics layer uses targeted clustering keys to optimize pruning and reduce scan cost across large Medicaid datasets.
 
 NPI_DIM
@@ -319,10 +327,13 @@ This creates a clean, well‑defined star schema optimized for analytics.
 ---
 
 📘 DATA DICTIONARY — MODEL LAYER
-📌 NPI_DIM
-Grain: One row per unique NPI
-Purpose: Provider master dimension for enrichment and analytics
 
+📌 NPI_DIM
+
+Grain: One row per unique NPI
+
+Purpose: Provider master dimension for enrichment and analytics
+```code
 | Column                    | Type    | Description         |
 | ------------------------- | ------- | --------------------------------- |
 | ``NPI``                   | NUMBER  | National Provider Identifier (PK) |
@@ -347,11 +358,14 @@ Purpose: Provider master dimension for enrichment and analytics
 | ``PRACTICE_STATE_US``     | VARCHAR | Cleaned U.S. state extracted from PRACTICE_STATE         |
 | ``MAILING_STATE_US``      | VARCHAR | Cleaned U.S. state extracted from MAILING_STATE          |
 | ``PROVIDER_STATE_US``     | VARCHAR | Unified state field used for Power BI geographic visuals |
-
+```
 
 📌 HCPCS_DIM
+
 Grain: One row per HCPCS code
+
 Purpose: Procedure metadata dimension
+```code
 | Column | Type | Description |
 | --- | --- | --- |
 | ``HCPCS_CODE`` | VARCHAR | Procedure code (PK) |
@@ -360,10 +374,14 @@ Purpose: Procedure metadata dimension
 | ``CATEGORY`` | VARCHAR | HCPCS category |
 | ``EFFECTIVE_DATE`` | DATE | Code effective date |
 | ``TERMINATION_DATE`` | DATE | Code termination date |
+```
 
 📌 FACT_MEDICAID_PROVIDER_SPENDING
+
 Grain: One row per provider per claim month
+
 Purpose: Core analytical fact table for Medicaid spending
+```code
 | Column | Type | Description |
 | --- | --- | --- |
 | ``CLAIM_MONTH`` | DATE | Month of service |
@@ -376,7 +394,7 @@ Purpose: Core analytical fact table for Medicaid spending
 | ``STATE`` | VARCHAR | Medicaid state |
 | ``PLACE_OF_SERVICE`` | VARCHAR | POS code |
 | ``SPECIALTY`` | VARCHAR | Provider specialty |
-
+```
 ---
 
 ## 🧾 License
