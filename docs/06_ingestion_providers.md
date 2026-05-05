@@ -128,7 +128,7 @@ SQL file: `sql/provider_clean.sql`
 
 Extracts 19 analytics fields from the 330-column RAW table.
 Key transformations:
-- TRY_TO_NUMBER for NPI
+- LPAD(TRIM(NPI), 10, '0') for NPI to ensure is a 10-digit identifier
 - TRIM for all string fields
 - TRY_TO_DATE for enumeration date
 - REGEXP_REPLACE + TRY_TO_TIMESTAMP_LTZ to sanitize LAST_UPDATE_DATE
@@ -138,7 +138,7 @@ Key transformations:
 CREATE OR REPLACE TABLE STAGE_MEDICAID.CLEAN.NPI_CLEAN AS
 SELECT
     -- Core identifiers
-    TRY_TO_NUMBER(NPI)                                                      AS NPI,
+    LPAD(TRIM(NPI), 10, '0')                                                 AS NPI,
     TRIM(ENTITY_TYPE_CODE)                                                  AS ENTITY_TYPE_CODE,
     TRIM(REPLACEMENT_NPI)                                                   AS REPLACEMENT_NPI,
 
@@ -241,13 +241,17 @@ SELECT
 FROM ranked
 WHERE rn = 1;
 
--- cluster
+-- ============================================================
+-- CLUSTERING: NPI_DIM
+-- ============================================================
 ALTER TABLE ANALYTICS_MEDICAID.MODEL.NPI_DIM
   CLUSTER BY (NPI);
 
--- ADD PK for structure
+-- ============================================================
+-- PRIMARY KEY: NPI_DIM
+-- ============================================================
 ALTER TABLE ANALYTICS_MEDICAID.MODEL.NPI_DIM
-ADD CONSTRAINT PK_NPI_DIM PRIMARY KEY (NPI);
+  ADD CONSTRAINT PK_NPI_DIM PRIMARY KEY (NPI);
 ```
 Quality Check:
 ```sql
