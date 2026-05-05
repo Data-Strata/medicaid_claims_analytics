@@ -17,7 +17,7 @@ WITH ranked AS (
                 ENUMERATION_DATE DESC NULLS LAST,
                 NPI DESC
         ) AS rn
-    FROM STAGE_MEDICAID.CLEAN.NPI
+    FROM STAGE_MEDICAID.CLEAN.NPI_CLEAN
 )
 SELECT
     NPI,
@@ -42,6 +42,29 @@ SELECT
 FROM ranked
 WHERE rn = 1;
 
-
 -- Validation
 SELECT COUNT(*) AS DIM_ROW_COUNT FROM NPI_DIM;
+
+-- ============================================================
+-- CLUSTERING: NPI_DIM
+-- ============================================================
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.NPI_DIM
+  CLUSTER BY (NPI);
+
+-- ============================================================
+-- PRIMARY KEY: NPI_DIM
+-- ============================================================
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.NPI_DIM
+  ADD CONSTRAINT PK_NPI_DIM PRIMARY KEY (NPI);
+
+-- ============================================================
+-- FOREIGN KEYS (DOCUMENTATION ONLY)
+-- ============================================================
+-- None here; FACT table references NPI_DIM, not vice‑versa.
+
+
+-- Quality Check:
+SELECT COUNT(*) AS TOTAL_ROWS,
+       COUNT(DISTINCT NPI) AS UNIQUE_NPIS
+FROM ANALYTICS_MEDICAID.MODEL.NPI_DIM;
+
