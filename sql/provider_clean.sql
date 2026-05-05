@@ -10,7 +10,7 @@ USE SCHEMA CLEAN;
 CREATE OR REPLACE TABLE STAGE_MEDICAID.CLEAN.NPI_CLEAN AS
 SELECT
     -- Core identifiers
-    TRY_TO_NUMBER(NPI)                                                      AS NPI,
+    LPAD(TRIM(NPI), 10, '0')                                                AS NPI,
     TRIM(ENTITY_TYPE_CODE)                                                  AS ENTITY_TYPE_CODE,
     TRIM(REPLACEMENT_NPI)                                                   AS REPLACEMENT_NPI,
 
@@ -66,4 +66,4 @@ FROM RAW_MEDICAID.PUBLIC.NPI_RAW;
 
 
 -- Validation
-SELECT COUNT(*) AS CLEAN_ROW_COUNT FROM PROVIDER_CLEAN;
+SELECT COUNT(*) AS CLEAN_ROW_COUNT FROM NPI_CLEAN;
