@@ -405,8 +405,8 @@ Purpose: Core analytical fact table for Medicaid spending
 | Column | Type | Description |
 | --- | --- | --- |
 | ``CLAIM_MONTH`` | DATE | Month of service |
-| ``BILLING_PROVIDER_NPI`` | NUMBER | FK → NPI_DIM |
-| ``RENDERING_PROVIDER_NPI`` | NUMBER | FK → NPI_DIM |
+| ``BILLING_PROVIDER_NPI`` | VARCHAR | FK → NPI_DIM |
+| ``RENDERING_PROVIDER_NPI`` | VARCHAR | FK → NPI_DIM |
 | ``HCPCS_CODE`` | VARCHAR | FK → HCPCS_DIM |
 | ``TOTAL_CLAIMS`` | NUMBER | Number of claims |
 | ``TOTAL_PAID_AMOUNT`` | NUMBER | Total paid amount |
