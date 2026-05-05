@@ -27,8 +27,8 @@ This repository includes all documentation, SQL scripts, data modeling logic, an
 
 ## 🚀 Project Status
 
-| Phase           | Status             |
-| --------------- | ------------------ |
+| Phase           | Status |
+| --------------- | ------ |
 | RAW ingestion (3 source datasets) | ✅ Complete |
 | STAGE layer (cleaned + typed) | ✅ Complete |
 | Dimension tables (NPI_DIM, HCPCS_DIM) | ✅ Complete |
@@ -354,30 +354,30 @@ Grain: One row per unique NPI
 
 Purpose: Provider master dimension for enrichment and analytics
 ```code
-| Column                    | Type    | Description         |
-| ------------------------- | ------- | --------------------------------- |
-| ``NPI``                   | NUMBER  | National Provider Identifier (PK) |
-| ``ENTITY_TYPE_CODE``      | VARCHAR | 1 = Individual, 2 = Organization |
-| ``REPLACEMENT_NPI``       | VARCHAR | Successor NPI if applicable |
-| ``ORG_NAME``              | VARCHAR | Legal business name (organizations) |
-| ``LAST_NAME``             | VARCHAR | Provider last name |
-| ``FIRST_NAME``            | VARCHAR | Provider first name |
-| ``MIDDLE_NAME``           | VARCHAR | Provider middle name |
-| ``CREDENTIALS``           | VARCHAR | Provider credentials (MD, DO, etc.) |
-| ``FULL_NAME``             | VARCHAR | Concatenated full name |
-| ``MAILING_CITY``          | VARCHAR | Mailing city |
-| ``MAILING_STATE``         | VARCHAR | Mailing state |
-| ``MAILING_ZIP``           | VARCHAR | 5‑digit ZIP |
-| ``PRACTICE_CITY``         | VARCHAR | Practice city |
-| ``PRACTICE_STATE``        | VARCHAR | Practice state |
-| ``PRACTICE_ZIP``          | VARCHAR | 5‑digit ZIP |
-| ``ENUMERATION_DATE``      | DATE    | NPI enumeration date |
-| ``LAST_UPDATE_DATE``      | DATE    | Last update to NPI record |
-| ``GENDER``                | VARCHAR | Provider gender |
-| ``PRIMARY_TAXONOMY_CODE`` | VARCHAR | Primary taxonomy code |
-| ``PRACTICE_STATE_US``     | VARCHAR | Cleaned U.S. state extracted from PRACTICE_STATE         |
-| ``MAILING_STATE_US``      | VARCHAR | Cleaned U.S. state extracted from MAILING_STATE          |
-| ``PROVIDER_STATE_US``     | VARCHAR | Unified state field used for Power BI geographic visuals |
+| Column                    | Type         | Description         |
+| ------------------------- | ------------ | --------------------------------- |
+| ``NPI``                   | VARCHAR(10)  | National Provider Identifier (PK) |
+| ``ENTITY_TYPE_CODE``      | VARCHAR      | 1 = Individual, 2 = Organization |
+| ``REPLACEMENT_NPI``       | VARCHAR      | Successor NPI if applicable |
+| ``ORG_NAME``              | VARCHAR      | Legal business name (organizations) |
+| ``LAST_NAME``             | VARCHAR      | Provider last name |
+| ``FIRST_NAME``            | VARCHAR      | Provider first name |
+| ``MIDDLE_NAME``           | VARCHAR      | Provider middle name |
+| ``CREDENTIALS``           | VARCHAR      | Provider credentials (MD, DO, etc.) |
+| ``FULL_NAME``             | VARCHAR      | Concatenated full name |
+| ``MAILING_CITY``          | VARCHAR      | Mailing city |
+| ``MAILING_STATE``         | VARCHAR      | Mailing state |
+| ``MAILING_ZIP``           | VARCHAR      | 5‑digit ZIP |
+| ``PRACTICE_CITY``         | VARCHAR      | Practice city |
+| ``PRACTICE_STATE``        | VARCHAR      | Practice state |
+| ``PRACTICE_ZIP``          | VARCHAR      | 5‑digit ZIP |
+| ``ENUMERATION_DATE``      | DATE         | NPI enumeration date |
+| ``LAST_UPDATE_DATE``      | DATE         | Last update to NPI record |
+| ``GENDER``                | VARCHAR      | Provider gender |
+| ``PRIMARY_TAXONOMY_CODE`` | VARCHAR      | Primary taxonomy code |
+| ``PRACTICE_STATE_US``     | VARCHAR      | Cleaned U.S. state extracted from PRACTICE_STATE         |
+| ``MAILING_STATE_US``      | VARCHAR      | Cleaned U.S. state extracted from MAILING_STATE          |
+| ``PROVIDER_STATE_US``     | VARCHAR      | Unified state field used for Power BI geographic visuals |
 ```
 
 📌 HCPCS_DIM
@@ -386,14 +386,14 @@ Grain: One row per HCPCS code
 
 Purpose: Procedure metadata dimension
 ```code
-| Column | Type | Description |
-| --- | --- | --- |
-| ``HCPCS_CODE`` | VARCHAR | Procedure code (PK) |
-| ``DESCRIPTION`` | VARCHAR | Long description |
-| ``SHORT_DESCRIPTION`` | VARCHAR | Short description |
-| ``CATEGORY`` | VARCHAR | HCPCS category |
-| ``EFFECTIVE_DATE`` | DATE | Code effective date |
-| ``TERMINATION_DATE`` | DATE | Code termination date |
+| Column               | Type    | Description         |
+| ---------------------| ------- | ------------------- |
+| ``HCPCS_CODE``       | VARCHAR | Procedure code (PK) |
+| ``DESCRIPTION``      | VARCHAR | Long description    |
+| ``SHORT_DESCRIPTION``| VARCHAR | Short description   |
+| ``CATEGORY``         | VARCHAR | HCPCS category      |
+| ``EFFECTIVE_DATE``   | DATE    | Code effective date |
+| ``TERMINATION_DATE`` | DATE    | Code termination date|
 ```
 
 📌 FACT_MEDICAID_PROVIDER_SPENDING
@@ -402,18 +402,18 @@ Grain: One row per provider per claim month
 
 Purpose: Core analytical fact table for Medicaid spending
 ```code
-| Column | Type | Description |
-| --- | --- | --- |
-| ``CLAIM_MONTH`` | DATE | Month of service |
-| ``BILLING_PROVIDER_NPI`` | VARCHAR | FK → NPI_DIM |
-| ``RENDERING_PROVIDER_NPI`` | VARCHAR | FK → NPI_DIM |
-| ``HCPCS_CODE`` | VARCHAR | FK → HCPCS_DIM |
-| ``TOTAL_CLAIMS`` | NUMBER | Number of claims |
-| ``TOTAL_PAID_AMOUNT`` | NUMBER | Total paid amount |
-| ``AVG_PAID_AMOUNT`` | NUMBER | Average paid amount |
-| ``STATE`` | VARCHAR | Medicaid state |
-| ``PLACE_OF_SERVICE`` | VARCHAR | POS code |
-| ``SPECIALTY`` | VARCHAR | Provider specialty |
+| Column                    | Type       | Description         |
+| ------------------------- | -----------| ------------------- |
+| ``CLAIM_MONTH``           | DATE       | Month of service    |
+| ``BILLING_PROVIDER_NPI``  | VARCHAR(10)| FK → NPI_DIM        |
+| ``RENDERING_PROVIDER_NPI``| VARCHAR(10)| FK → NPI_DIM        |
+| ``HCPCS_CODE``            | VARCHAR    | FK → HCPCS_DIM      |
+| ``TOTAL_CLAIMS``          | NUMBER     | Number of claims    |
+| ``TOTAL_PAID_AMOUNT``     | NUMBER     | Total paid amount   |
+| ``AVG_PAID_AMOUNT``       | NUMBER     | Average paid amount |
+| ``STATE``                 | VARCHAR    | Medicaid state      |
+| ``PLACE_OF_SERVICE``      | VARCHAR    | POS code            |
+| ``SPECIALTY``             | VARCHAR    | Provider specialty  |
 ```
 ---
 
@@ -422,8 +422,7 @@ Purpose: Core analytical fact table for Medicaid spending
 This project is licensed under the [MIT License](LICENSE).
 
 ---
-
-
+  
 ## 📬 Contact
 
 For questions or collaboration, feel free to open an issue or reach out.
