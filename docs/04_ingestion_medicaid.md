@@ -1,11 +1,16 @@
 
 ### *Medicaid Provider Spending Ingestion Pipeline*
+
 Pipeline Tier: Ingestion → Raw → Clean → Stage → Fact
+
 Dataset: Medicaid Provider Spending by HCPCS (HHS Open Data)
 
 ---
-## 🟦 1. This document describes the end‑to‑end ingestion workflow for the Medicaid Provider Spending dataset.
+## 🟦 1. Overview
+This document describes the end‑to‑end ingestion workflow for the Medicaid Provider Spending dataset.
+
 The dataset is delivered as a **3.5 GB ZIP** containing a single **11‑GB CSV**.  
+
 Due to Snowflake sandbox limits, ZIP extraction must be performed locally.
 
 This pipeline loads the dataset into:
@@ -15,6 +20,7 @@ This pipeline loads the dataset into:
 
 ## 🟦 2. Architecture Overview
 The ingestion pipeline follows the same pattern as HCPCS and NPI:
+```code
 External ZIP
 ↓
 MEDICAID_STAGE (landing zone)
@@ -28,7 +34,7 @@ RAW_MEDICAID.PUBLIC.MEDICAID_PROVIDER_SPENDING_RAW
 STAGE_MEDICAID.CLEAN.MEDICAID_PROVIDER_SPENDING_STAGE
 ↓
 ANALYTICS_MEDICAID.MODEL.FACT_PROVIDER_SPENDING
-
+```
 
 ## 🟦 3. Dataset Description
 
@@ -150,6 +156,52 @@ LEFT JOIN ANALYTICS_MEDICAID.MODEL.DIM_PROVIDER p
 LEFT JOIN ANALYTICS_MEDICAID.MODEL.HCPCS_DIM h
     ON s.HCPCS_CODE = h.HCPCS_CODE;
 ```
+9.1 FACT_MEDICAID_PROVIDER_SPENDING — Cluster + Foreign Keys
+
+📌 Cluster Key: (CLAIM_MONTH, BILLING_PROVIDER_NPI)
+```sql
+-- ============================================================
+-- CLUSTERING: FACT_MEDICAID_PROVIDER_SPENDING
+-- ============================================================
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.FACT_MEDICAID_PROVIDER_SPENDING
+  CLUSTER BY (CLAIM_MONTH, BILLING_PROVIDER_NPI);
+```
+
+📌 Foreign Keys (documented, not enforced)
+```sql
+-- ============================================================
+-- FOREIGN KEYS: FACT_MEDICAID_PROVIDER_SPENDING
+-- ============================================================
+
+-- Billing provider → NPI_DIM
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.FACT_MEDICAID_PROVIDER_SPENDING
+  ADD CONSTRAINT FK_FACT_BILLING_NPI
+  FOREIGN KEY (BILLING_PROVIDER_NPI)
+  REFERENCES ANALYTICS_MEDICAID.MODEL.NPI_DIM (NPI);
+
+-- Rendering provider → NPI_DIM
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.FACT_MEDICAID_PROVIDER_SPENDING
+  ADD CONSTRAINT FK_FACT_RENDERING_NPI
+  FOREIGN KEY (RENDERING_PROVIDER_NPI)
+  REFERENCES ANALYTICS_MEDICAID.MODEL.NPI_DIM (NPI);
+
+-- HCPCS → HCPCS_DIM
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.FACT_MEDICAID_PROVIDER_SPENDING
+  ADD CONSTRAINT FK_FACT_HCPCS
+  FOREIGN KEY (HCPCS_CODE)
+  REFERENCES ANALYTICS_MEDICAID.MODEL.HCPCS_DIM (HCPCS_CODE);
+
+-- Quality check
+SELECT COUNT(*) AS TOTAL_ROWS,
+       COUNT(DISTINCT BILLING_PROVIDER_NPI) AS UNIQUE_BILLING_NPIS,
+       COUNT(DISTINCT HCPCS_CODE) AS UNIQUE_HCPCS
+FROM ANALYTICS_MEDICAID.MODEL.FACT_MEDICAID_PROVIDER_SPENDING;  
+```
+Rationale:
+- CLAIM_MONTH supports time‑series pruning
+- BILLING_PROVIDER_NPI supports provider‑level rollups
+- Composite clustering dramatically reduces scan cost on large fact tables
+
 
 ## 🟦 10. Quality Checks
 SQL file: sql/medicaid_quality_checks.sql
@@ -166,9 +218,10 @@ SQL file: sql/medicaid_full_pipeline.sql
 
 Excerpt:
 ```sql
-CALL MEDICAID_LOAD_RAW();
-CALL MEDICAID_BUILD_STAGE();
-CALL MEDICAID_BUILD_FACT();
+!source medicaid_ingestion_raw.sql;
+!source medicaid_clean_stage.sql;
+!source medicaid_fact_table.sql;
+!source medicaid_quality_checks.sql;
 ```
 
 🟦 12. Troubleshooting
