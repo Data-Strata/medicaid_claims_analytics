@@ -156,6 +156,27 @@ QUALIFY ROW_NUMBER() OVER (
 ```
 This ensures one row per HCPCS code, selecting the most recent record.
 
+9.1 HCPCS_DIM — Cluster + Primary Key
+```sql
+-- ============================================================
+-- CLUSTERING: HCPCS_DIM
+-- ============================================================
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.HCPCS_DIM
+  CLUSTER BY (HCPCS_CODE);
+
+-- ============================================================
+-- PRIMARY KEY: HCPCS_DIM
+-- ============================================================
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.HCPCS_DIM
+  ADD CONSTRAINT PK_HCPCS_DIM PRIMARY KEY (HCPCS_CODE);
+```
+
+Rationale:
+- Lookup dimension
+- Small, stable
+- Frequently joined to FACT
+- Minimal reclustering cost
+
 ## 🟦 10. Integration With Medicaid Fact Table
 Validate join coverage:
 ```sql
