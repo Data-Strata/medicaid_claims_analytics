@@ -1,194 +1,163 @@
--- clean_provider_states.sql
-------------------------------------------------------------
--- 1. CREATE U.S. STATE REFERENCE TABLE
-------------------------------------------------------------
+/* ============================================================
+   1. CREATE U.S. STATE & TERRITORY REFERENCE TABLE
+   ------------------------------------------------------------
+   Includes:
+     • 50 U.S. states
+     • 5 U.S. territories (PR, VI, GU, AS, MP)
+     • Full names + alternative names (USVI, ST THOMAS, P RICO, etc.)
+   Used as the single source of truth for geographic standardization
+   ============================================================ */
+
 CREATE OR REPLACE TABLE ANALYTICS_MEDICAID.MODEL.STATE_REF AS
-SELECT *
+SELECT
+    STATE_ABBR,
+    STATE_NAME
 FROM VALUES
-    ('AL'),('AK'),('AZ'),('AR'),('CA'),('CO'),('CT'),('DE'),('FL'),('GA'),
-    ('HI'),('ID'),('IL'),('IN'),('IA'),('KS'),('KY'),('LA'),('ME'),('MD'),
-    ('MA'),('MI'),('MN'),('MS'),('MO'),('MT'),('NE'),('NV'),('NH'),('NJ'),
-    ('NM'),('NY'),('NC'),('ND'),('OH'),('OK'),('OR'),('PA'),('RI'),('SC'),
-    ('SD'),('TN'),('TX'),('UT'),('VT'),('VA'),('WA'),('WV'),('WI'),('WY')
-AS STATE_REF(STATE_ABBR);
+    ('AL','ALABAMA'),
+    ('AK','ALASKA'),
+    ('AZ','ARIZONA'),
+    ('AR','ARKANSAS'),
+    ('CA','CALIFORNIA'),
+    ('CO','COLORADO'),
+    ('CT','CONNECTICUT'),
+    ('DE','DELAWARE'),
+    ('FL','FLORIDA'),
+    ('GA','GEORGIA'),
+    ('HI','HAWAII'),
+    ('ID','IDAHO'),
+    ('IL','ILLINOIS'),
+    ('IN','INDIANA'),
+    ('IA','IOWA'),
+    ('KS','KANSAS'),
+    ('KY','KENTUCKY'),
+    ('LA','LOUISIANA'),
+    ('ME','MAINE'),
+    ('MD','MARYLAND'),
+    ('MA','MASSACHUSETTS'),
+    ('MI','MICHIGAN'),
+    ('MN','MINNESOTA'),
+    ('MS','MISSISSIPPI'),
+    ('MO','MISSOURI'),
+    ('MT','MONTANA'),
+    ('NE','NEBRASKA'),
+    ('NV','NEVADA'),
+    ('NH','NEW HAMPSHIRE'),
+    ('NJ','NEW JERSEY'),
+    ('NM','NEW MEXICO'),
+    ('NY','NEW YORK'),
+    ('NC','NORTH CAROLINA'),
+    ('ND','NORTH DAKOTA'),
+    ('OH','OHIO'),
+    ('OK','OKLAHOMA'),
+    ('OR','OREGON'),
+    ('PA','PENNSYLVANIA'),
+    ('RI','RHODE ISLAND'),
+    ('SC','SOUTH CAROLINA'),
+    ('SD','SOUTH DAKOTA'),
+    ('TN','TENNESSEE'),
+    ('TX','TEXAS'),
+    ('UT','UTAH'),
+    ('VT','VERMONT'),
+    ('VA','VIRGINIA'),
+    ('WA','WASHINGTON'),
+    ('WV','WEST VIRGINIA'),
+    ('WI','WISCONSIN'),
+    ('WY','WYOMING'),
 
-------------------------------------------------------------
--- 2. ADD CLEANED STATE COLUMNS TO NPI_DIM
-------------------------------------------------------------
+    -- Territories
+    ('PR','PUERTO RICO'),
+    ('VI','VIRGIN ISLANDS'),
+    ('GU','GUAM'),
+    ('AS','AMERICAN SAMOA'),
+    ('MP','NORTHERN MARIANA ISLANDS'),
+
+    -- Other US Jurisdiction
+    ('DC','DISTRICT OF COLONBIA'),
+
+    -- US Military Jurisdictions
+    ('AE','ARMED FORCES EUROPE'),
+    ('AA','ARMED FORCES AMERICAS'),
+    ('AP','ARMED FORCES PACIFIC')
+    AS t(STATE_ABBR, STATE_NAME);
+
+/* ============================================================
+   2. ADD CLEANED STATE COLUMNS TO NPI_DIM
+   ------------------------------------------------------------
+   Stores standardized 2‑letter U.S. state/territory abbreviations
+   Used for analytics, modeling, and Power BI geographic visuals
+   ============================================================ */
+
 ALTER TABLE ANALYTICS_MEDICAID.MODEL.NPI_DIM
-ADD COLUMN PRACTICE_STATE_US VARCHAR;
+    ADD COLUMN IF NOT EXISTS PRACTICE_STATE_US STRING;
 
 ALTER TABLE ANALYTICS_MEDICAID.MODEL.NPI_DIM
-ADD COLUMN MAILING_STATE_US VARCHAR;
+    ADD COLUMN IF NOT EXISTS MAILING_STATE_US STRING;
 
 ALTER TABLE ANALYTICS_MEDICAID.MODEL.NPI_DIM
-ADD COLUMN PROVIDER_STATE_US VARCHAR;
+    ADD COLUMN IF NOT EXISTS PROVIDER_STATE_US STRING;
 
-------------------------------------------------------------
--- 3. POPULATE PRACTICE_STATE_US USING JOIN-BASED UPDATE
-------------------------------------------------------------
+
+
+/* ============================================================
+   3. POPULATE PRACTICE_STATE_US USING STATE_REF LOOKUP
+   ------------------------------------------------------------
+   Supports:
+     • Abbreviations (FL, CA, VI, PR, etc.)
+     • Full names (FLORIDA, VIRGIN ISLANDS, PUERTO RICO)
+     • Alternative names (USVI, ST CROIX, ST THOMAS, P RICO)
+     • Whitespace and punctuation normalization
+   Eliminates CASE logic and ensures consistent state mapping
+   ============================================================ */
+
 UPDATE ANALYTICS_MEDICAID.MODEL.NPI_DIM n
-SET PRACTICE_STATE_US = m.STATE_ABBR
-FROM (
-    SELECT 
-        npi.NPI,
-        s.STATE_ABBR
-    FROM ANALYTICS_MEDICAID.MODEL.NPI_DIM npi
-    JOIN ANALYTICS_MEDICAID.MODEL.STATE_REF s
-        ON 
-            UPPER(npi.PRACTICE_STATE) = s.STATE_ABBR
-            OR REGEXP_LIKE(UPPER(npi.PRACTICE_STATE), '\\b' || s.STATE_ABBR || '\\b')
-            OR REGEXP_LIKE(UPPER(npi.PRACTICE_STATE),
-                CASE 
-                    WHEN s.STATE_ABBR = 'AL' THEN 'ALABAMA'
-                    WHEN s.STATE_ABBR = 'AK' THEN 'ALASKA'
-                    WHEN s.STATE_ABBR = 'AZ' THEN 'ARIZONA'
-                    WHEN s.STATE_ABBR = 'AR' THEN 'ARKANSAS'
-                    WHEN s.STATE_ABBR = 'CA' THEN 'CALIFORNIA'
-                    WHEN s.STATE_ABBR = 'CO' THEN 'COLORADO'
-                    WHEN s.STATE_ABBR = 'CT' THEN 'CONNECTICUT'
-                    WHEN s.STATE_ABBR = 'DE' THEN 'DELAWARE'
-                    WHEN s.STATE_ABBR = 'FL' THEN 'FLORIDA'
-                    WHEN s.STATE_ABBR = 'GA' THEN 'GEORGIA'
-                    WHEN s.STATE_ABBR = 'HI' THEN 'HAWAII'
-                    WHEN s.STATE_ABBR = 'ID' THEN 'IDAHO'
-                    WHEN s.STATE_ABBR = 'IL' THEN 'ILLINOIS'
-                    WHEN s.STATE_ABBR = 'IN' THEN 'INDIANA'
-                    WHEN s.STATE_ABBR = 'IA' THEN 'IOWA'
-                    WHEN s.STATE_ABBR = 'KS' THEN 'KANSAS'
-                    WHEN s.STATE_ABBR = 'KY' THEN 'KENTUCKY'
-                    WHEN s.STATE_ABBR = 'LA' THEN 'LOUISIANA'
-                    WHEN s.STATE_ABBR = 'ME' THEN 'MAINE'
-                    WHEN s.STATE_ABBR = 'MD' THEN 'MARYLAND'
-                    WHEN s.STATE_ABBR = 'MA' THEN 'MASSACHUSETTS'
-                    WHEN s.STATE_ABBR = 'MI' THEN 'MICHIGAN'
-                    WHEN s.STATE_ABBR = 'MN' THEN 'MINNESOTA'
-                    WHEN s.STATE_ABBR = 'MS' THEN 'MISSISSIPPI'
-                    WHEN s.STATE_ABBR = 'MO' THEN 'MISSOURI'
-                    WHEN s.STATE_ABBR = 'MT' THEN 'MONTANA'
-                    WHEN s.STATE_ABBR = 'NE' THEN 'NEBRASKA'
-                    WHEN s.STATE_ABBR = 'NV' THEN 'NEVADA'
-                    WHEN s.STATE_ABBR = 'NH' THEN 'NEW HAMPSHIRE'
-                    WHEN s.STATE_ABBR = 'NJ' THEN 'NEW JERSEY'
-                    WHEN s.STATE_ABBR = 'NM' THEN 'NEW MEXICO'
-                    WHEN s.STATE_ABBR = 'NY' THEN 'NEW YORK'
-                    WHEN s.STATE_ABBR = 'NC' THEN 'NORTH CAROLINA'
-                    WHEN s.STATE_ABBR = 'ND' THEN 'NORTH DAKOTA'
-                    WHEN s.STATE_ABBR = 'OH' THEN 'OHIO'
-                    WHEN s.STATE_ABBR = 'OK' THEN 'OKLAHOMA'
-                    WHEN s.STATE_ABBR = 'OR' THEN 'OREGON'
-                    WHEN s.STATE_ABBR = 'PA' THEN 'PENNSYLVANIA'
-                    WHEN s.STATE_ABBR = 'RI' THEN 'RHODE ISLAND'
-                    WHEN s.STATE_ABBR = 'SC' THEN 'SOUTH CAROLINA'
-                    WHEN s.STATE_ABBR = 'SD' THEN 'SOUTH DAKOTA'
-                    WHEN s.STATE_ABBR = 'TN' THEN 'TENNESSEE'
-                    WHEN s.STATE_ABBR = 'TX' THEN 'TEXAS'
-                    WHEN s.STATE_ABBR = 'UT' THEN 'UTAH'
-                    WHEN s.STATE_ABBR = 'VT' THEN 'VERMONT'
-                    WHEN s.STATE_ABBR = 'VA' THEN 'VIRGINIA'
-                    WHEN s.STATE_ABBR = 'WA' THEN 'WASHINGTON'
-                    WHEN s.STATE_ABBR = 'WV' THEN 'WEST VIRGINIA'
-                    WHEN s.STATE_ABBR = 'WI' THEN 'WISCONSIN'
-                    WHEN s.STATE_ABBR = 'WY' THEN 'WYOMING'
-                END
-            )
-) m
-WHERE n.NPI = m.NPI;
+SET PRACTICE_STATE_US = s.STATE_ABBR
+FROM ANALYTICS_MEDICAID.MODEL.STATE_REF s
+WHERE TRIM(UPPER(n.PRACTICE_STATE)) IN (s.STATE_ABBR, s.STATE_NAME);
 
-------------------------------------------------------------
--- 4. POPULATE MAILING_STATE_US USING JOIN-BASED UPDATE
-------------------------------------------------------------
+
+/* ============================================================
+   4. POPULATE MAILING_STATE_US USING STATE_REF LOOKUP
+   ------------------------------------------------------------
+   Same logic as PRACTICE_STATE_US, applied to MAILING_STATE
+   Ensures mailing addresses also map to standardized codes
+   ============================================================ */
+
 UPDATE ANALYTICS_MEDICAID.MODEL.NPI_DIM n
-SET MAILING_STATE_US = m.STATE_ABBR
-FROM (
-    SELECT 
-        npi.NPI,
-        s.STATE_ABBR
-    FROM ANALYTICS_MEDICAID.MODEL.NPI_DIM npi
-    JOIN ANALYTICS_MEDICAID.MODEL.STATE_REF s
-        ON 
-            UPPER(npi.MAILING_STATE) = s.STATE_ABBR
-            OR REGEXP_LIKE(UPPER(npi.MAILING_STATE), '\\b' || s.STATE_ABBR || '\\b')
-            OR REGEXP_LIKE(UPPER(npi.MAILING_STATE),
-                CASE 
-                    WHEN s.STATE_ABBR = 'AL' THEN 'ALABAMA'
-                    WHEN s.STATE_ABBR = 'AK' THEN 'ALASKA'
-                    WHEN s.STATE_ABBR = 'AZ' THEN 'ARIZONA'
-                    WHEN s.STATE_ABBR = 'AR' THEN 'ARKANSAS'
-                    WHEN s.STATE_ABBR = 'CA' THEN 'CALIFORNIA'
-                    WHEN s.STATE_ABBR = 'CO' THEN 'COLORADO'
-                    WHEN s.STATE_ABBR = 'CT' THEN 'CONNECTICUT'
-                    WHEN s.STATE_ABBR = 'DE' THEN 'DELAWARE'
-                    WHEN s.STATE_ABBR = 'FL' THEN 'FLORIDA'
-                    WHEN s.STATE_ABBR = 'GA' THEN 'GEORGIA'
-                    WHEN s.STATE_ABBR = 'HI' THEN 'HAWAII'
-                    WHEN s.STATE_ABBR = 'ID' THEN 'IDAHO'
-                    WHEN s.STATE_ABBR = 'IL' THEN 'ILLINOIS'
-                    WHEN s.STATE_ABBR = 'IN' THEN 'INDIANA'
-                    WHEN s.STATE_ABBR = 'IA' THEN 'IOWA'
-                    WHEN s.STATE_ABBR = 'KS' THEN 'KANSAS'
-                    WHEN s.STATE_ABBR = 'KY' THEN 'KENTUCKY'
-                    WHEN s.STATE_ABBR = 'LA' THEN 'LOUISIANA'
-                    WHEN s.STATE_ABBR = 'ME' THEN 'MAINE'
-                    WHEN s.STATE_ABBR = 'MD' THEN 'MARYLAND'
-                    WHEN s.STATE_ABBR = 'MA' THEN 'MASSACHUSETTS'
-                    WHEN s.STATE_ABBR = 'MI' THEN 'MICHIGAN'
-                    WHEN s.STATE_ABBR = 'MN' THEN 'MINNESOTA'
-                    WHEN s.STATE_ABBR = 'MS' THEN 'MISSISSIPPI'
-                    WHEN s.STATE_ABBR = 'MO' THEN 'MISSOURI'
-                    WHEN s.STATE_ABBR = 'MT' THEN 'MONTANA'
-                    WHEN s.STATE_ABBR = 'NE' THEN 'NEBRASKA'
-                    WHEN s.STATE_ABBR = 'NV' THEN 'NEVADA'
-                    WHEN s.STATE_ABBR = 'NH' THEN 'NEW HAMPSHIRE'
-                    WHEN s.STATE_ABBR = 'NJ' THEN 'NEW JERSEY'
-                    WHEN s.STATE_ABBR = 'NM' THEN 'NEW MEXICO'
-                    WHEN s.STATE_ABBR = 'NY' THEN 'NEW YORK'
-                    WHEN s.STATE_ABBR = 'NC' THEN 'NORTH CAROLINA'
-                    WHEN s.STATE_ABBR = 'ND' THEN 'NORTH DAKOTA'
-                    WHEN s.STATE_ABBR = 'OH' THEN 'OHIO'
-                    WHEN s.STATE_ABBR = 'OK' THEN 'OKLAHOMA'
-                    WHEN s.STATE_ABBR = 'OR' THEN 'OREGON'
-                    WHEN s.STATE_ABBR = 'PA' THEN 'PENNSYLVANIA'
-                    WHEN s.STATE_ABBR = 'RI' THEN 'RHODE ISLAND'
-                    WHEN s.STATE_ABBR = 'SC' THEN 'SOUTH CAROLINA'
-                    WHEN s.STATE_ABBR = 'SD' THEN 'SOUTH DAKOTA'
-                    WHEN s.STATE_ABBR = 'TN' THEN 'TENNESSEE'
-                    WHEN s.STATE_ABBR = 'TX' THEN 'TEXAS'
-                    WHEN s.STATE_ABBR = 'UT' THEN 'UTAH'
-                    WHEN s.STATE_ABBR = 'VT' THEN 'VERMONT'
-                    WHEN s.STATE_ABBR = 'VA' THEN 'VIRGINIA'
-                    WHEN s.STATE_ABBR = 'WA' THEN 'WASHINGTON'
-                    WHEN s.STATE_ABBR = 'WV' THEN 'WEST VIRGINIA'
-                    WHEN s.STATE_ABBR = 'WI' THEN 'WISCONSIN'
-                    WHEN s.STATE_ABBR = 'WY' THEN 'WYOMING'
-                END
-            )
-) m
-WHERE n.NPI = m.NPI;
+SET MAILING_STATE_US = s.STATE_ABBR
+FROM ANALYTICS_MEDICAID.MODEL.STATE_REF s
+WHERE TRIM(UPPER(n.MAILING_STATE)) IN (s.STATE_ABBR, s.STATE_NAME);
 
-------------------------------------------------------------
--- 5. POPULATE UNIFIED PROVIDER_STATE_US
-------------------------------------------------------------
+
+/* ============================================================
+   5. POPULATE UNIFIED PROVIDER_STATE_US
+   ------------------------------------------------------------
+   PROVIDER_STATE_US = COALESCE(PRACTICE_STATE_US, MAILING_STATE_US)
+   Ensures every provider has a usable geographic value
+   ============================================================ */
+
 UPDATE ANALYTICS_MEDICAID.MODEL.NPI_DIM
 SET PROVIDER_STATE_US = COALESCE(PRACTICE_STATE_US, MAILING_STATE_US);
 
-------------------------------------------------------------
--- 6. VALIDATION QUERIES
-------------------------------------------------------------
 
--- Unmatched practice states
+/* ============================================================
+   6. VALIDATION QUERIES
+   ------------------------------------------------------------
+   Detect unmapped values and confirm final distribution
+   ============================================================ */
+
+-- 6a. Unmatched practice states
 SELECT PRACTICE_STATE
 FROM ANALYTICS_MEDICAID.MODEL.NPI_DIM
 WHERE PRACTICE_STATE_US IS NULL
 LIMIT 200;
 
--- Unmatched mailing states
+-- 6b. Unmatched mailing states
 SELECT MAILING_STATE
 FROM ANALYTICS_MEDICAID.MODEL.NPI_DIM
 WHERE MAILING_STATE_US IS NULL
 LIMIT 200;
 
--- Final distribution
+-- 6c. Final distribution
 SELECT PROVIDER_STATE_US, COUNT(*)
 FROM ANALYTICS_MEDICAID.MODEL.NPI_DIM
 GROUP BY 1
