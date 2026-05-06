@@ -13,6 +13,9 @@
 -- DIM
 !source provider_dimension.sql;
 
--- QC
+-- STANDARIZE STATES
+!source model/clean_provider_states.sql
+
+-- VALIDATE
 !source provider_quality_checks.sql;
 
