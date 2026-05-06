@@ -138,7 +138,7 @@ Key transformations:
 CREATE OR REPLACE TABLE STAGE_MEDICAID.CLEAN.NPI_CLEAN AS
 SELECT
     -- Core identifiers
-    LPAD(TRIM(NPI), 10, '0')                                                 AS NPI,
+    LPAD(TRIM(NPI), 10, '0')                                                AS NPI,
     TRIM(ENTITY_TYPE_CODE)                                                  AS ENTITY_TYPE_CODE,
     TRIM(REPLACEMENT_NPI)                                                   AS REPLACEMENT_NPI,
 
@@ -202,7 +202,7 @@ FROM STAGE_MEDICAID.CLEAN.NPI_CLEAN;
 ## 🟦 9. Create DIM_PROVIDER (Analytics Layer)
 SQL file: `sql/provider_dimension.sql`
 
-# Deduplication Logic
+## Deduplication Logic
 The NPI Registry can contain multiple records per NPI (e.g., address changes,
 taxonomy updates). The dimension table must guarantee one row per NPI,
 keeping the most recently updated record.
@@ -259,6 +259,18 @@ SELECT COUNT(*) AS TOTAL_ROWS, COUNT(DISTINCT NPI) AS UNIQUE_NPIS
 FROM ANALYTICS_MEDICAID.MODEL.NPI_DIM;
 ```
 
+## 9.1 Standardizes PRACTICE_STATE and MAILING_STATE into U.S. states:
+SQL file: `sql/clean_provider_states.sql`
+
+The raw NPI Registry fields `PRACTICE_STATE` and `MAILING_STATE` contain global location values (countries, provinces, APO/FPO codes, ZIP codes, mixed formats).
+To support reliable U.S. state–level analytics, the MODEL layer applies a standardization process that extracts valid U.S. state abbreviations using a lookup table (`STATE_REF`) and REGEXP‑based matching.
+
+Three new fields are created in `NPI_DIM`:
+- `PRACTICE_STATE_US`
+- `MAILING_STATE_US`
+- `PROVIDER_STATE_US` (unified best‑available state)
+
+
 ## 🟦 10. Provider Match Coverage (NPI Integration Validation)
 To validate the integration between the Medicaid Provider‑Level Spending Fact Table and the NPI_DIM dimension, a left join was performed on the billing provider NPI:
 ```sql
@@ -307,10 +319,6 @@ HAVING CNT > 1;
 
 ---
 
-## ✍️ Author
-© 2026 Mairilyn Yera Galindo | *Data-Strata Analytics Portfolio*
-Healthcare Data Analytics | Snowflake + SQL Server + Power BI + Excel
-🏖️ Boca Raton, FL
-🌐 https://github.com/Data-Strata
-📧 mairilynyera@gmail.com
-💼 LinkedIn: www.linkedin.com/in/mairilyn-yera-galindo-07a93932
+© 2026 Mairilyn Yera Galindo  
+Data-Strata Analytics Portfolio  
+Healthcare Data Analytics | Snowflake | SQL Server | Power BI
