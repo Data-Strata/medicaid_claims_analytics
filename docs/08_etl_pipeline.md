@@ -22,41 +22,7 @@ Each pipeline follows the same **RAW → STAGE → MODEL → SEMANTIC MODEL (Pow
 
 ---
 
-## 🟦 3. Medicaid Pipeline
-
-
-**Important:** The Medicaid pipeline must run **last** because `FACT_PROVIDER_SPENDING` joins against both `DIM_PROVIDER` and `DIM_HCPCS`. If the dimensions do not exist, the LEFT JOINs will produce NULL enrichment columns.
-
-### Execution Flow
-
-    External ZIP → Local Extract → MEDICAID_EXTRACTED → RAW → STAGE → FACT
-
-### SQL Files (Execution Order)
-
-| Step | SQL File | Action |
-|------|----------|--------|
-| 1 | `sql/medicaid_ingestion_raw.sql` | Create file format, RAW table, COPY INTO |
-| 2 | `sql/medicaid_clean_stage.sql` | Create MEDICAID_PROVIDER_SPENDING_STAGE (typed) |
-| 3 | `sql/medicaid_fact_table.sql` | Create FACT_PROVIDER_SPENDING (joined with DIMs) |
-| 4 | `sql/medicaid_quality_checks.sql` | Row-count validation across all layers |
-
-### Full Pipeline Script
-SQL file: `sql/medicaid_full_pipeline.sql`
-
-    -- Run from SnowSQL
-    !source medicaid_ingestion_raw.sql;
-    !source medicaid_clean_stage.sql;
-    !source medicaid_fact_table.sql;
-    !source medicaid_quality_checks.sql;
-
-### Prerequisites
-- Medicaid CSV must be uploaded to `@MEDICAID_EXTRACTED` via SnowSQL PUT
-- `MEDICAID_CSV_FORMAT` file format must exist
-- See `docs/04_ingestion_medicaid.md` for the complete file preparation workflow
-
----
-
-## 🟦 4. HCPCS Pipeline
+## 🟦 3. HCPCS Pipeline
 
 ### Execution Flow
 
@@ -87,7 +53,7 @@ SQL file: `sql/hcpcs_full_pipeline.sql`
 
 ---
 
-## 🟦 5. NPI(Providers) Pipeline
+## 🟦 4. NPI(Providers) Pipeline
 
 ### Execution Flow
 
@@ -95,12 +61,13 @@ SQL file: `sql/hcpcs_full_pipeline.sql`
 
 ### SQL Files (Execution Order)
 
-| Step | SQL File | Action |
-|------|----------|--------|
-| 1 | `sql/provider_ingestion_raw.sql` | Create 330-column RAW table, COPY INTO |
-| 2 | `sql/provider_clean.sql` | Extract 19 analytics fields into NPI_CLEAN |
-| 3 | `sql/provider_dimension.sql` | Create NPI_DIM (deduplicated) |
-| 4 | `sql/provider_quality_checks.sql` | Row-count, null, duplicate, and orphan checks |
+| Step| SQL File                              | Action                                               |
+|-----|---------------------------------------|------------------------------------------------------|
+| 1   | `sql/provider_ingestion_raw.sql`      | Create 330-column RAW table, COPY INTO |
+| 2   | `sql/provider_clean.sql`              | Extract 19 analytics fields into NPI_CLEAN |
+| 3   | `sql/provider_dimension.sql`          | Create NPI_DIM (deduplicated) |
+| 4   | `sql/model/clean_provider_states.sql` | Standardizes PRACTICE_STATE and MAILING_STATE into U.S. states  
+| 5   | `sql/provider_quality_checks.sql`     | Row-count, null, duplicate, and orphan checks |
 
 ### Prerequisites
 - NPI CSV must be uploaded to `@NPI_EXTRACTED` via SnowSQL PUT
@@ -109,43 +76,79 @@ SQL file: `sql/hcpcs_full_pipeline.sql`
 
  ```sql 
   -- Run from SnowSQL
-    !source provider_ingestion_raw.sql;
-    !source provider_clean.sql;
-    !source provider_dimension.sql;
-    !source provider_quality_checks.sql;
+    !source sql/provider_ingestion_raw.sql;
+    !source sql/provider_clean.sql;
+    !source sql/provider_dimension.sql;
+    !source sql/model/clean_provider_states.sql
+    !source sql/provider_quality_checks.sql;
 ```
 ---
 
-🟦 6. MODEL Layer Semantic Scripts (Power BI Modeling)
-These scripts are not part of the ingestion pipelines.
-They run after all three pipelines complete, because they depend on:
-- NPI_DIM
-- HCPCS_DIM
-- FACT_MEDICAID_PROVIDER_SPENDING
+## 🟦 5. Medicaid Pipeline
 
-They enrich the MODEL layer for BI and semantic modeling.
+
+**Important:** The Medicaid pipeline must run **LAST** because `FACT_PROVIDER_SPENDING` joins against both `DIM_PROVIDER` and `DIM_HCPCS`. If the dimensions do not exist, the LEFT JOINs will produce NULL enrichment columns.
+
+### Execution Flow
+
+    External ZIP → Local Extract → MEDICAID_EXTRACTED → RAW → STAGE → FACT
+
+### SQL Files (Execution Order)
+
+| Step | SQL File | Action |
+|------|----------|--------|
+| 1 | `sql/medicaid_ingestion_raw.sql` | Create file format, RAW table, COPY INTO |
+| 2 | `sql/medicaid_clean_stage.sql` | Create MEDICAID_PROVIDER_SPENDING_STAGE (typed) |
+| 3 | `sql/model/date_and_service_dimensions.sql` | Creates DATE_DIM & SERVICE_DIM dimesions
+| 4 | `sql/medicaid_fact_table.sql` | Create FACT_PROVIDER_SPENDING (joined with DIMs) |
+| 5 | `sql/medicaid_quality_checks.sql` | Row-count validation across all layers |
+
+### Full Pipeline Script
+SQL file: `sql/medicaid_full_pipeline.sql`
+
+    -- Run from SnowSQL
+    !source sql/medicaid_ingestion_raw.sql;
+    !source sql/medicaid_clean_stage.sql;
+    !source sql/model/date_and_service_dimensions.sql 
+    !source sql/medicaid_fact_table.sql;
+    !source sql/medicaid_quality_checks.sql;
+
+### Prerequisites
+- Medicaid CSV must be uploaded to `@MEDICAID_EXTRACTED` via SnowSQL PUT
+- `MEDICAID_CSV_FORMAT` file format must exist
+- See `docs/04_ingestion_medicaid.md` for the complete file preparation workflow
+
+---
+🟦 6. ✅ MODEL Layer Semantic Scripts (Power BI Modeling)
+
+These scripts are part of the MODEL layer, not post‑processing. 
+
+They run after MODEL tables are built, but before FACT_MODEL.
+
+They depend on:
+
+- NPI_DIM (for geographic cleanup)
+- Nothing else (DATE_DIM + SERVICE_CATEGORY_DIM are standalone)
+- They enrich the MODEL layer for BI and semantic modeling.
 
 Execution Flow
-```sql
-NPI_DIM → Geographic Standardization → Updated NPI_DIM
-FACT_MEDICAID_PROVIDER_SPENDING → DATE_DIM + SERVICE_CATEGORY_DIM → BI Semantic Model
+```
+provider_build_dim() 
+    → clean_provider_states.sql 
+    → date_and_service_dimensions.sql 
+    → fact_build_model()
 ```
 SQL Files (Execution Order)
-| Step | SQL File                               | Action                                                                                                                       |
-| ---- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 1    | ``sql/clean_provider_states.sql``      | Standardizes PRACTICE_STATE and MAILING_STATE into U.S. states (adds PRACTICE_STATE_US, MAILING_STATE_US, PROVIDER_STATE_US) |
-| 2    | ``sql/date_and_service_dimensions.sql``| Creates DATE_DIM and SERVICE_CATEGORY_DIM for Power BI modeling |
+| Step | SQL File                                      | Action                                                                                                                       |
+| ---  | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1    | ``sql/model/clean_provider_states.sql``       | Standardizes PRACTICE_STATE and MAILING_STATE into U.S. states (adds PRACTICE_STATE_US, MAILING_STATE_US, PROVIDER_STATE_US) |
+| 2    | ``sql/model/date_and_service_dimensions.sql`` | Creates DATE_DIM and SERVICE_CATEGORY_DIM for Power BI modeling                                                              |
 
 Prerequisites
-- All three ingestion pipelines must be completed
-- NPI_DIM, HCPCS_DIM, and FACT_MEDICAID_PROVIDER_SPENDING must exist
-- These scripts do not modify RAW or STAGE layers — only MODEL
-
-Execution Notes
-- These scripts are typically run:
-- Once during initial warehouse build
-- Whenever the MODEL layer is refreshed
-- Before exporting to Power BI
+- provider_build_dim() must be completed
+- NPI_DIM must exist
+- These scripts run before FACT_MODEL
+- They do not modify RAW or STAGE layers — only MODEL
 
 ---
 
@@ -200,14 +203,10 @@ After all three pipelines complete, validate dimension join coverage:
 | 16 | clean_provider_states.sql          | MODEL (Semantic)  | ANALYTICS  | Geographic Standardization |
 | 17 | date_and_service_dimensions.sql    | MODEL (Semantic)  | ANALYTICS  | DATE_DIM + SERVICE_CATEGORY_DIM |
 ```
-
-
 ---
 
-## ✍️ Author
-© 2026 Mairilyn Yera Galindo | *Data-Strata Analytics Portfolio*
-Healthcare Data Analytics | Snowflake + SQL Server + Power BI + Excel
-🏖️ Boca Raton, FL
-🌐 https://github.com/Data-Strata
-📧 mairilynyera@gmail.com
+© 2026 Mairilyn Yera Galindo  
+Data-Strata Analytics Portfolio  
+Healthcare Data Analytics | Snowflake | SQL Server | Power BI
+
 💼 LinkedIn: www.linkedin.com/in/mairilyn-yera-galindo-07a93932
