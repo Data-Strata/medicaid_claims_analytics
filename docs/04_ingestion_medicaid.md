@@ -1,16 +1,12 @@
 
 ### *Medicaid Provider Spending Ingestion Pipeline*
-
 Pipeline Tier: Ingestion → Raw → Clean → Stage → Fact
-
 Dataset: Medicaid Provider Spending by HCPCS (HHS Open Data)
 
 ---
 ## 🟦 1. Overview
 This document describes the end‑to‑end ingestion workflow for the Medicaid Provider Spending dataset.
-
 The dataset is delivered as a **3.5 GB ZIP** containing a single **11‑GB CSV**.  
-
 Due to Snowflake sandbox limits, ZIP extraction must be performed locally.
 
 This pipeline loads the dataset into:
@@ -139,8 +135,20 @@ SELECT
     ...
 FROM RAW_MEDICAID.PUBLIC.MEDICAID_PROVIDER_SPENDING_RAW;
 ```
+## 🟦 9. Create DATE_DIM and SERVICE_CATEGORY_DIM for Power BI modeling
+SQL file: sql/model/date_and_service_dimensions.sql
 
-## 🟦 9. FACT Table
+Purpose:
+To enrich the MODEL layer and the Power BI modeling. It creates DATE_DIM table and SERVICE_CATEGORY_DIM table that will be joined to the FACT Table  
+These dimensions are generated programmatically and do not originate from any source dataset.
+
+`DATE_DIM` - Grain: 1 row per calendar date
+
+Join: `FACT_MEDICAID_PROVIDER_SPENDING.CLAIM_MONTH` → `DATE_DIM.DATE`
+
+`SERVICE_CATEGORY_DIM` - A reference dimension defining Medicaid service categories based on HCPCS patterns.
+
+## 🟦 10. FACT Table
 SQL file: sql/medicaid_fact_table.sql
 
 Excerpt:
@@ -229,4 +237,10 @@ Excerpt:
 - CSV not visible → wrong stage/schema
 - Extraction fails → Snowflake /tmp limit → extract locally
 
+
+---
+
+© 2026 Mairilyn Yera Galindo  
+Data-Strata Analytics Portfolio  
+Healthcare Data Analytics | Snowflake | SQL Server | Power BI
 
