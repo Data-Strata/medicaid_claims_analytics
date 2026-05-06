@@ -98,9 +98,9 @@ Two additional reference datasets enrich the claims data:
 RAW_MEDICAID.PUBLIC          STAGE_MEDICAID.CLEAN              ANALYTICS_MEDICAID.MODEL
 ─────────────────────        ────────────────────────          ────────────────────────────
 MEDICAID_PROVIDER_       →   MEDICAID_PROVIDER_            →   FACT_MEDICAID_PROVIDER_
-SPENDING_RAW                 SPENDING_STAGE                    SPENDING
+SPENDING_RAW                 SPENDING_STAGE  (10 cols)               SPENDING    
 
-NPI_RAW (330 cols)       →   NPI_CLEAN (11 cols)           →   NPI_DIM (1 row per NPI)
+NPI_RAW (330 cols)       →   NPI_CLEAN (19 cols)           →   NPI_DIM (1 row per NPI), 3 new columns after geographic clean up
 
 HCPCS_RAW_WIDE (48 cols) →   HCPCS_CLEAN (6 cols)          →   HCPCS_DIM (1 row per code)
 ```
@@ -386,14 +386,14 @@ Grain: One row per HCPCS code
 
 Purpose: Procedure metadata dimension
 ```code
-| Column               | Type    | Description         |
-| ---------------------| ------- | ------------------- |
-| ``HCPCS_CODE``       | VARCHAR | Procedure code (PK) |
-| ``DESCRIPTION``      | VARCHAR | Long description    |
-| ``SHORT_DESCRIPTION``| VARCHAR | Short description   |
-| ``CATEGORY``         | VARCHAR | HCPCS category      |
-| ``EFFECTIVE_DATE``   | DATE    | Code effective date |
-| ``TERMINATION_DATE`` | DATE    | Code termination date|
+| Column | Type | Description |
+| --- | --- | --- |
+| ``HCPCS_CODE`` | VARCHAR | Procedure code (PK) |
+| ``DESCRIPTION`` | VARCHAR | Long description |
+| ``SHORT_DESCRIPTION`` | VARCHAR | Short description |
+| ``CATEGORY`` | VARCHAR | HCPCS category |
+| ``EFFECTIVE_DATE`` | DATE | Code effective date |
+| ``TERMINATION_DATE`` | DATE | Code termination date |
 ```
 
 📌 FACT_MEDICAID_PROVIDER_SPENDING
@@ -402,18 +402,18 @@ Grain: One row per provider per claim month
 
 Purpose: Core analytical fact table for Medicaid spending
 ```code
-| Column                    | Type       | Description         |
-| ------------------------- | -----------| ------------------- |
-| ``CLAIM_MONTH``           | DATE       | Month of service    |
-| ``BILLING_PROVIDER_NPI``  | VARCHAR(10)| FK → NPI_DIM        |
-| ``RENDERING_PROVIDER_NPI``| VARCHAR(10)| FK → NPI_DIM        |
-| ``HCPCS_CODE``            | VARCHAR    | FK → HCPCS_DIM      |
-| ``TOTAL_CLAIMS``          | NUMBER     | Number of claims    |
-| ``TOTAL_PAID_AMOUNT``     | NUMBER     | Total paid amount   |
-| ``AVG_PAID_AMOUNT``       | NUMBER     | Average paid amount |
-| ``STATE``                 | VARCHAR    | Medicaid state      |
-| ``PLACE_OF_SERVICE``      | VARCHAR    | POS code            |
-| ``SPECIALTY``             | VARCHAR    | Provider specialty  |
+| Column | Type | Description |
+| --- | --- | --- |
+| ``CLAIM_MONTH`` | DATE | Month of service |
+| ``BILLING_PROVIDER_NPI`` | VARCHAR(10)  | FK → NPI_DIM |
+| ``RENDERING_PROVIDER_NPI`` | VARCHAR(10) | FK → NPI_DIM |
+| ``HCPCS_CODE`` | VARCHAR | FK → HCPCS_DIM |
+| ``TOTAL_CLAIMS`` | NUMBER | Number of claims |
+| ``TOTAL_PAID_AMOUNT`` | NUMBER | Total paid amount |
+| ``AVG_PAID_AMOUNT`` | NUMBER | Average paid amount |
+| ``STATE`` | VARCHAR | Medicaid state |
+| ``PLACE_OF_SERVICE`` | VARCHAR | POS code |
+| ``SPECIALTY`` | VARCHAR | Provider specialty |
 ```
 ---
 
