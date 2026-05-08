@@ -123,75 +123,95 @@ SELECT COUNT(*) FROM RAW_MEDICAID.PUBLIC.NPI_RAW;
 Result: ~17.6 Million rows
 
 
-## 🟦 8. CLEAN Table (Staging Layer)
-SQL file: `sql/provider_clean.sql`
+# 🟦 8. CLEAN Table (Staging Layer)
+SQL file: sql/provider_clean.sql  
+Output table: STAGE_MEDICAID.CLEAN.NPI_CLEAN
 
-Extracts 19 analytics fields from the 330-column RAW table.
-Key transformations:
-- LPAD(TRIM(NPI), 10, '0') for NPI to ensure is a 10-digit identifier
-- TRIM for all string fields
-- TRY_TO_DATE for enumeration date
-- REGEXP_REPLACE + TRY_TO_TIMESTAMP_LTZ to sanitize LAST_UPDATE_DATE
-(removes non-numeric characters before casting)
+The CLEAN step standardizes and normalizes provider identity fields from the 330‑column NPI Registry RAW table.
+This layer produces a fully analytics‑ready provider table with:
+- Cleaned individual names
+- Cleaned organization names
+- Corrected FULL_NAME construction
+- Normalized ZIP codes
+- Standardized dates
+- Primary taxonomy selection
+- Removal of empty placeholder NPIs
+- Preservation of 23 legitimate nameless organizations
 
+Key Transformations
+1. Identifier Normalization
+LPAD(TRIM(NPI), 10, '0') ensures all NPIs are 10‑digit strings.
+
+2. Name Field Cleaning
+- Removes invisible characters (tabs, NBSP, control chars).
+- Converts empty strings to NULL.
+- Cleans FIRST_NAME, MIDDLE_NAME, LAST_NAME before constructing FULL_NAME.
+
+3. Correct FULL_NAME Construction (Snowflake‑Safe)
+Snowflake’s CONCAT_WS returns NULL when any argument is NULL.
+To avoid losing FULL_NAME for 3.6M+ individuals, the CLEAN layer uses:
+
+```Code
+FIRST_NAME
++ optional MIDDLE_NAME
++ LAST_NAME
+```
+via safe concatenation:
+```sql
+TRIM(
+    CONCAT(
+        FIRST_NAME,
+        CASE WHEN MIDDLE_NAME IS NOT NULL THEN ' ' || MIDDLE_NAME ELSE '' END,
+        CASE WHEN LAST_NAME IS NOT NULL THEN ' ' || LAST_NAME ELSE '' END
+    )
+)
+
+```
+4. ZIP Code Normalization
+- Extracts 5‑digit ZIPs from 5–9 digit fields.
+- Invalid ZIPs → NULL.
+
+5. Date Normalization
+- TRY_TO_DATE for enumeration and last update dates.
+
+6. Primary Taxonomy Selection
+- Uses taxonomy code where PRIMARY_TAXONOMY_SWITCH = 'Y'.
+
+7. Removal of Empty Providers
+- Rows where all identifying fields are NULL are excluded:
++ FIRST_NAME
++ LAST_NAME
++ ORG_NAME
++ ENTITY_TYPE_CODE
+
+8. Preservation of 23 Nameless Organizations
+After cleaning, 23 NPIs remain where:
+> ENTITY_TYPE_CODE = 2
+> ORG_NAME = NULL
+> FULL_NAME = NULL
+> Taxonomy + addresses + enumeration dates exist
+
+These are legitimate CMS records for newly enumerated or pending organizations.
+They must remain in the model for referential integrity.
+
+🟦 Final CLEAN SQL (Excerpt)
 ```sql
 CREATE OR REPLACE TABLE STAGE_MEDICAID.CLEAN.NPI_CLEAN AS
-SELECT
-    -- Core identifiers
-    LPAD(TRIM(NPI), 10, '0')                                                AS NPI,
-    TRIM(ENTITY_TYPE_CODE)                                                  AS ENTITY_TYPE_CODE,
-    TRIM(REPLACEMENT_NPI)                                                   AS REPLACEMENT_NPI,
+WITH CLEANED AS (
+    SELECT
+        LPAD(TRIM(NPI), 10, '0') AS NPI,
+        NULLIF(TRIM(ENTITY_TYPE_CODE), '') AS ENTITY_TYPE_CODE,
+        NULLIF(TRIM(REPLACEMENT_NPI), '') AS REPLACEMENT_NPI,
 
-    -- Organization / individual names
-    TRIM(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME)                    AS ORG_NAME,
-    TRIM(PROVIDER_LAST_NAME_LEGAL_NAME)                                     AS LAST_NAME,
-    TRIM(PROVIDER_FIRST_NAME)                                               AS FIRST_NAME,
-    TRIM(PROVIDER_MIDDLE_NAME)                                              AS MIDDLE_NAME,
-    TRIM(PROVIDER_CREDENTIAL_TEXT)                                          AS CREDENTIALS,
+        /* Clean Individual Name Fields */
+        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_FIRST_NAME), '[[:space:]]+', ''), '') AS FIRST_NAME,
+        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_MIDDLE_NAME), '[[:space:]]+', ''), '') AS MIDDLE_NAME,
+        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_LAST_NAME_LEGAL_NAME), '[[:space:]]+', ''), '') AS LAST_NAME,
 
-    -- Full name (individuals only)
-    TRIM(
-        CONCAT_WS(' ',
-            TRIM(PROVIDER_FIRST_NAME),
-            TRIM(PROVIDER_MIDDLE_NAME),
-            TRIM(PROVIDER_LAST_NAME_LEGAL_NAME)
-        )
-    )                                                                       AS FULL_NAME,
-
-    -- Mailing address (ZIP normalized)
-    TRIM(PROVIDER_BUSINESS_MAILING_ADDRESS_CITY_NAME)                       AS MAILING_CITY,
-    TRIM(PROVIDER_BUSINESS_MAILING_ADDRESS_STATE_NAME)                      AS MAILING_STATE,
-    CASE
-        WHEN REGEXP_LIKE(PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE, '^[0-9]{5,9}$')
-            THEN SUBSTR(PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE, 1, 5)
-        ELSE NULL
-    END                                                                     AS MAILING_ZIP,
-
-    -- Practice address (ZIP normalized)
-    TRIM(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_CITY_NAME)             AS PRACTICE_CITY,
-    TRIM(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_STATE_NAME)            AS PRACTICE_STATE,
-    CASE
-        WHEN REGEXP_LIKE(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_POSTAL_CODE, '^[0-9]{5,9}$')
-            THEN SUBSTR(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_POSTAL_CODE, 1, 5)
-        ELSE NULL
-    END                                                                     AS PRACTICE_ZIP,
-
-    -- Dates
-    TRY_TO_DATE(PROVIDER_ENUMERATION_DATE)                                  AS ENUMERATION_DATE,
-    TRY_TO_DATE(LAST_UPDATE_DATE)                                           AS LAST_UPDATE_DATE,
-
-    -- Gender
-    TRIM(PROVIDER_SEX_CODE)                                                 AS GENDER,
-
-    -- Primary taxonomy
-    CASE
-        WHEN HEALTHCARE_PROVIDER_PRIMARY_TAXONOMY_SWITCH_1 = 'Y'
-            THEN TRIM(HEALTHCARE_PROVIDER_TAXONOMY_CODE_1)
-        ELSE TRIM(HEALTHCARE_PROVIDER_TAXONOMY_CODE_1)
-    END                                                                     AS PRIMARY_TAXONOMY_CODE
-
-FROM RAW_MEDICAID.PUBLIC.NPI_RAW;
+        /* Organization Name */
+        NULLIF(TRIM(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME), '') AS ORG_NAME,
 ```
+(Section continues with ZIP normalization, dates, taxonomy, and FULL_NAME logic.)
 
 Quality check:
 ```sql
@@ -315,6 +335,19 @@ HAVING CNT > 1;
 - Null NPIs → check for header mismatches or encoding issues
 - Duplicate NPIs in DIM → verify LAST_UPDATE_DATE logic
 - Join failures in Medicaid fact → check NPI formatting (leading zeros)
+
+
+# 13.  Version Log  
+May 2026 Update
+NPI_DIM Enhancements
+Corrected FULL_NAME construction to avoid Snowflake CONCAT_WS null‑propagation.
+Result: FULL_NAME populated for 3.6M+ individual providers.
+
+Added Provider_Display_Name semantic rule (FULL_NAME → ORG_NAME → “Unknown Organization”).
+
+Added Data_Quality_Flag to identify 23 legitimate nameless organizations (ENTITY_TYPE_CODE = 2).
+
+Updated RAW → STAGE and STAGE → MODEL mappings accordingly.
 
 
 ---
