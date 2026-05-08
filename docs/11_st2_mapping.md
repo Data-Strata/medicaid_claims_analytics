@@ -116,7 +116,7 @@ The pipeline ingests three source datasets into Snowflake and transforms them th
 | `FIRST_NAME` | `PROVIDER_FIRST_NAME` | `TRIM()` |
 | `MIDDLE_NAME` | `PROVIDER_MIDDLE_NAME` | `TRIM()` |
 | `CREDENTIALS` | `PROVIDER_CREDENTIAL_TEXT` | `TRIM()` |
-| ``FULL_NAME`` | `Derived |`TRIM(CONCAT(FIRST_NAME, CASE WHEN MIDDLE_NAME IS NOT NULL THEN` `| |MIDDLE_NAME ELSE ` ` END, CASE WHEN LAST_NAME IS NOT NULL THEN ` `| | LAST_NAME ELSE ` ` END))|
+| `FULL_NAME`   | Derived |`TRIM(CONCAT(FIRST_NAME, CASE WHEN MIDDLE_NAME IS NOT NULL THEN` `| |MIDDLE_NAME ELSE ` ` END, CASE WHEN LAST_NAME IS NOT NULL THEN ` `| | LAST_NAME ELSE ` ` END))|
 | `MAILING_CITY` | `PROVIDER_BUSINESS_MAILING_ADDRESS_CITY_NAME` | `TRIM()` |
 | `MAILING_STATE` | `PROVIDER_BUSINESS_MAILING_ADDRESS_STATE_NAME` | `TRIM()` |
 | `MAILING_ZIP` | `PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE` | `SUBSTR(zip, 1, 5)` if matches `^[0-9]{5,9}$`, else `NULL` |
@@ -137,6 +137,7 @@ The pipeline ingests three source datasets into Snowflake and transforms them th
 | `MAILING_STATE_US` | `MAILING_STATE` | **Added in MODEL layer** — lookup via `STATE_REF`, normalized to 2-letter U.S. abbreviation |
 | `PROVIDER_STATE_US` | Derived | **Added in MODEL layer** — `COALESCE(PRACTICE_STATE_US, MAILING_STATE_US)` |
 | ``Provider_Display_Name`` | ``FULL_NAME``, ``ORG_NAME`` | **Semantic model rule:** ``FULL_NAME ``→ ``ORG_NAME ``→ ``"Unknown ``Organization"`` |
+| ``Provider_Type`` | Derived | ``ENTITY_TYPE_CODE``
 | ``Data_Quality_Flag`` | Derived | ``'NAME_MISSING_ORG'`` when ``FULL_NAME`` and ``ORG_NAME`` are NULL; else ``'VALID'`` |
 
 ### Geographic Standardization (MODEL Layer)
@@ -150,6 +151,8 @@ The raw NPI Registry fields (`PRACTICE_STATE`, `MAILING_STATE`) contain global l
 | `PRACTICE_STATE_US` | Extract valid U.S. state abbreviation using `STATE_REF` lookup table | Standardizes practice location to valid U.S. states/territories only |
 | `MAILING_STATE_US` | Extract valid U.S. state abbreviation using `STATE_REF` lookup table | Standardizes mailing location to valid U.S. states/territories only |
 | `PROVIDER_STATE_US` | `COALESCE(PRACTICE_STATE_US, MAILING_STATE_US)` | Unified state field used by Power BI for geographic visuals |
+| ``Provider_Display_Name`` | ``FULL_NAME``, ``ORG_NAME`` | **Semantic model rule:** ``FULL_NAME ``→ ``ORG_NAME ``→ ``"Unknown ``Organization"`` |
+| ``Data_Quality_Flag`` | ``'NAME_MISSING_ORG'`` when ``FULL_NAME`` and ``ORG_NAME`` are NULL; else ``'VALID'`` |
 
 #### Transformation Process
 
@@ -366,12 +369,15 @@ SERVICE_CATEGORY_DIM (SERVICE_CATEGORY)
 
 | Derived Field | Source Fields | Logic |
 |---------------|---------------|-------|
-| `FULL_NAME` | `FIRST_NAME`, `MIDDLE_NAME`, `LAST_NAME` | `CONCAT_WS(' ', FIRST_NAME, MIDDLE_NAME, LAST_NAME)` |
+| `FULL_NAME` | `FIRST_NAME`, `MIDDLE_NAME`, `LAST_NAME` | `TRIM(CONCAT(FIRST_NAME, CASE WHEN MIDDLE_NAME IS NOT NULL THEN ' '`| |`MIDDLE_NAME ELSE ' ' END`, `CASE WHEN LAST_NAME IS NOT NULL THEN ' '`| | `LAST_NAME ELSE ' ' END`))| |
 | `CLAIM_MONTH` | `CLAIM_FROM_MONTH` | `TRY_TO_DATE(value || '-01')` |
 | `SERVICE_CATEGORY` | `HCPCS_CODE` | CASE statement pattern matching |
 | `PRACTICE_STATE_US` | `PRACTICE_STATE` | `STATE_REF` lookup via JOIN |
 | `MAILING_STATE_US` | `MAILING_STATE` | `STATE_REF` lookup via JOIN |
 | `PROVIDER_STATE_US` | `PRACTICE_STATE_US`, `MAILING_STATE_US` | `COALESCE(PRACTICE_STATE_US, MAILING_STATE_US)` |
+| ``Provider_Type`` | ``ENTITY_TYPE_CODE`` | `IF 1 THEN 'INDIVIDUAL' ELSE 'ORGANIZATION'`
+| ``Provider_Display_Name`` | ``FULL_NAME``, ``ORG_NAME`` | Semantic model rule: ``FULL_NAME ``→ ``ORG_NAME ``→ ``"Unknown ``Organization"`` |
+| ``Data_Quality_Flag`` | ``'NAME_MISSING_ORG'`` when ``FULL_NAME`` and ``ORG_NAME`` are NULL; ELSE ``'VALID'`` |
 | `YEAR_MONTH` | `DATE_KEY` | `TO_VARCHAR(full_date, 'YYYY-MM')` |
 | `WEEKDAY_FLAG` | `DATE_KEY` | `CASE WHEN DAYOFWEEK IN (6,7) THEN 'Weekend' ELSE 'Weekday' END` |
 
@@ -394,6 +400,7 @@ SERVICE_CATEGORY_DIM (SERVICE_CATEGORY)
 4. **Enrichment**:
    - FACT table enriched with provider names, HCPCS descriptions, state locations via LEFT JOIN
    - Missing dimension values result in NULL enrichment fields
+
 
 ---
 
@@ -489,7 +496,7 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
 | **2.0** | 2026-05-06 | Mairilyn Yera    | Comprehensive update: expanded all table mappings with detailed RAW→STAGE→MODEL lineage, added STAGE layer field mappings, documented all derived fields,
                                           | added SERVICE_CATEGORY logic, enhanced geographic standardization section, added complete transformation logic summary, expanded join relationships section, 
                                           | added Power BI usage guidance |
-| **2.1** | 2026-05-07 | Mairilyn Yera    | Corrected Full_Name construction, added Provider_Display_Name and Data_Quality_Flag
+| **2.1** | 2026-05-07 | Mairilyn Yera    | Corrected Full_Name construction, added Provider_Display_Name, Provider_Type and Data_Quality_Flag
 
 **Note**: All changes follow semantic versioning and include brief descriptions of modifications.
 
