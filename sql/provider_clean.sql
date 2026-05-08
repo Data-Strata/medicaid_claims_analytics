@@ -8,61 +8,105 @@ USE DATABASE STAGE_MEDICAID;
 USE SCHEMA CLEAN;
 
 CREATE OR REPLACE TABLE STAGE_MEDICAID.CLEAN.NPI_CLEAN AS
-SELECT
-    -- Core identifiers
-    LPAD(TRIM(NPI), 10, '0')                                                AS NPI,
-    TRIM(ENTITY_TYPE_CODE)                                                  AS ENTITY_TYPE_CODE,
-    TRIM(REPLACEMENT_NPI)                                                   AS REPLACEMENT_NPI,
+WITH CLEANED AS (
+    SELECT
+        /* ---------------------------------------------------------
+           Core Identifiers
+        --------------------------------------------------------- */
+        LPAD(TRIM(NPI), 10, '0')                                                            AS NPI,
+        NULLIF(TRIM(ENTITY_TYPE_CODE), '')                                                  AS ENTITY_TYPE_CODE,
+        NULLIF(TRIM(REPLACEMENT_NPI), '')                                                   AS REPLACEMENT_NPI,
 
-    -- Organization / individual names
-    TRIM(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME)                    AS ORG_NAME,
-    TRIM(PROVIDER_LAST_NAME_LEGAL_NAME)                                     AS LAST_NAME,
-    TRIM(PROVIDER_FIRST_NAME)                                               AS FIRST_NAME,
-    TRIM(PROVIDER_MIDDLE_NAME)                                              AS MIDDLE_NAME,
-    TRIM(PROVIDER_CREDENTIAL_TEXT)                                          AS CREDENTIALS,
+        /* ---------------------------------------------------------
+           Clean Individual Name Fields (remove invisible characters)
+        --------------------------------------------------------- */
+        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_FIRST_NAME), '[[:space:]]+', ''), '')           AS FIRST_NAME,
+        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_MIDDLE_NAME), '[[:space:]]+', ''), '')          AS MIDDLE_NAME,
+        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_LAST_NAME_LEGAL_NAME), '[[:space:]]+', ''), '') AS LAST_NAME,
 
-    -- Full name (individuals only)
-    TRIM(
-        CONCAT_WS(' ',
-            TRIM(PROVIDER_FIRST_NAME),
-            TRIM(PROVIDER_MIDDLE_NAME),
-            TRIM(PROVIDER_LAST_NAME_LEGAL_NAME)
-        )
-    )                                                                       AS FULL_NAME,
+        /* ---------------------------------------------------------
+           Organization Name
+        --------------------------------------------------------- */
+        NULLIF(TRIM(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME), '')                    AS ORG_NAME,
 
-    -- Mailing address (ZIP normalized)
-    TRIM(PROVIDER_BUSINESS_MAILING_ADDRESS_CITY_NAME)                       AS MAILING_CITY,
-    TRIM(PROVIDER_BUSINESS_MAILING_ADDRESS_STATE_NAME)                      AS MAILING_STATE,
-    CASE
-        WHEN REGEXP_LIKE(PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE, '^[0-9]{5,9}$')
-            THEN SUBSTR(PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE, 1, 5)
-        ELSE NULL
-    END                                                                     AS MAILING_ZIP,
+        /* ---------------------------------------------------------
+           Credentials
+        --------------------------------------------------------- */
+        NULLIF(TRIM(PROVIDER_CREDENTIAL_TEXT), '')                                          AS CREDENTIALS,
 
-    -- Practice address (ZIP normalized)
-    TRIM(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_CITY_NAME)             AS PRACTICE_CITY,
-    TRIM(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_STATE_NAME)            AS PRACTICE_STATE,
-    CASE
-        WHEN REGEXP_LIKE(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_POSTAL_CODE, '^[0-9]{5,9}$')
-            THEN SUBSTR(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_POSTAL_CODE, 1, 5)
-        ELSE NULL
-    END                                                                     AS PRACTICE_ZIP,
+        /* ---------------------------------------------------------
+           Mailing Address (ZIP normalized)
+        --------------------------------------------------------- */
+        NULLIF(TRIM(PROVIDER_BUSINESS_MAILING_ADDRESS_CITY_NAME), '')                       AS MAILING_CITY,
+        NULLIF(TRIM(PROVIDER_BUSINESS_MAILING_ADDRESS_STATE_NAME), '')                      AS MAILING_STATE,
+        CASE
+            WHEN REGEXP_LIKE(PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE, '^[0-9]{5,9}$')
+                THEN SUBSTR(PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE, 1, 5)
+            ELSE NULL
+        END                                                                                 AS MAILING_ZIP,
 
-    -- Dates
-    TRY_TO_DATE(PROVIDER_ENUMERATION_DATE)                                  AS ENUMERATION_DATE,
-    TRY_TO_DATE(LAST_UPDATE_DATE)                                           AS LAST_UPDATE_DATE,
+        /* ---------------------------------------------------------
+           Practice Address (ZIP normalized)
+        --------------------------------------------------------- */
+        NULLIF(TRIM(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_CITY_NAME), '')             AS PRACTICE_CITY,
+        NULLIF(TRIM(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_STATE_NAME), '')            AS PRACTICE_STATE,
+        CASE
+            WHEN REGEXP_LIKE(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_POSTAL_CODE, '^[0-9]{5,9}$')
+                THEN SUBSTR(PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_POSTAL_CODE, 1, 5)
+            ELSE NULL
+        END                                                                                 AS PRACTICE_ZIP,
 
-    -- Gender
-    TRIM(PROVIDER_SEX_CODE)                                                 AS GENDER,
+        /* ---------------------------------------------------------
+           Dates
+        --------------------------------------------------------- */
+        TRY_TO_DATE(PROVIDER_ENUMERATION_DATE)                                              AS ENUMERATION_DATE,
+        TRY_TO_DATE(LAST_UPDATE_DATE)                                                       AS LAST_UPDATE_DATE,
 
-    -- Primary taxonomy
-    CASE
-        WHEN HEALTHCARE_PROVIDER_PRIMARY_TAXONOMY_SWITCH_1 = 'Y'
-            THEN TRIM(HEALTHCARE_PROVIDER_TAXONOMY_CODE_1)
-        ELSE TRIM(HEALTHCARE_PROVIDER_TAXONOMY_CODE_1)
-    END                                                                     AS PRIMARY_TAXONOMY_CODE
+        /* ---------------------------------------------------------
+           Gender
+        --------------------------------------------------------- */
+        NULLIF(TRIM(PROVIDER_SEX_CODE), '')                                                 AS GENDER,
 
-FROM RAW_MEDICAID.PUBLIC.NPI_RAW;
+        /* ---------------------------------------------------------
+           Primary Taxonomy
+        --------------------------------------------------------- */
+        CASE
+            WHEN HEALTHCARE_PROVIDER_PRIMARY_TAXONOMY_SWITCH_1 = 'Y'
+                THEN NULLIF(TRIM(HEALTHCARE_PROVIDER_TAXONOMY_CODE_1), '')
+            ELSE NULLIF(TRIM(HEALTHCARE_PROVIDER_TAXONOMY_CODE_1), '')
+        END                                                                                 AS PRIMARY_TAXONOMY_CODE
+
+    FROM RAW_MEDICAID.PUBLIC.NPI_RAW
+),
+
+/* ---------------------------------------------------------
+   Build FULL_NAME from cleaned fields (Snowflake-safe)
+--------------------------------------------------------- */
+FINAL AS (
+    SELECT
+        *,
+        TRIM(
+            CONCAT(
+                FIRST_NAME,
+                CASE WHEN MIDDLE_NAME IS NOT NULL THEN ' ' || MIDDLE_NAME ELSE '' END,
+                CASE WHEN LAST_NAME IS NOT NULL THEN ' ' || LAST_NAME ELSE '' END
+            )
+        )                                                                                  AS FULL_NAME
+    FROM CLEANED
+)
+
+/* ---------------------------------------------------------
+   Remove rows where ALL identifying fields are NULL
+--------------------------------------------------------- */
+SELECT *
+FROM FINAL
+WHERE COALESCE(
+        FIRST_NAME,
+        LAST_NAME,
+        ORG_NAME,
+        ENTITY_TYPE_CODE
+    ) IS NOT NULL;
+
 
 
 -- Validation
