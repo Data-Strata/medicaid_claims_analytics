@@ -276,17 +276,23 @@ END
 
 ### Field Mappings
 
-| Target Column | Source | Transformation Logic |
-|--------------|--------|----------------------|
-| `DATE_KEY` | Generated date | `full_date` — serves as both surrogate key and natural key |
-| `YEAR` | Generated date | `YEAR(full_date)` |
-| `MONTH` | Generated date | `MONTH(full_date)` |
-| `DAY` | Generated date | `DAY(full_date)` |
-| `YEAR_MONTH` | Generated date | `TO_VARCHAR(full_date, 'YYYY-MM')` — BI-friendly format |
-| `QUARTER` | Generated date | `QUARTER(full_date)` |
-| `DAY_OF_WEEK` | Generated date | `DAYOFWEEK(full_date)` |
-| `WEEK_OF_YEAR` | Generated date | `WEEKOFYEAR(full_date)` |
-| `WEEKDAY_FLAG` | Generated date | `CASE WHEN DAYOFWEEK(full_date) IN (6,7) THEN 'Weekend' ELSE 'Weekday' END` |
+```code
+| Target columns     | Source    | Transformation Logic                                         |
+| ------------------ | --------- | ------------------------------------------------------------ |
+| ``DATE_KEY``       | Generated | ``dt`` (DATE) — primary key for FACT joins                   |
+| ``YEAR``           | Generated | ``YEAR(dt)``                                                 |
+| ``QUARTER``        | Generated | ``QUARTER(dt)``                                              |
+| ``MONTH``          | Generated | ``MONTH(dt)``                                                |
+| ``MONTH_NAME``     | Generated | ``TO_CHAR(dt, ``'Month')``                                   |
+| ``YEAR_MONTH``     | Generated | ``TO_CHAR(dt, ``'YYYYMM')``                                  |
+| ``DAY_OF_MONTH``   | Generated | ``DAY(dt)``                                                  |
+| ``DAY_NAME``       | Generated | ``TO_CHAR(dt, ``'Day')``                                     |
+| ``DAY_OF_WEEK``    | Generated | ``DAYOFWEEK(dt)``                                            |
+| ``WEEK_OF_YEAR``   | Generated | ``WEEKOFYEAR(dt)``                                           |
+| ``DATE_TEXT``      | Generated | ``TO_VARCHAR(dt, ``'YYYY-MM-DD')``                           |
+| ``MONTH_NAME_YEAR``| Generated | ``TO_VARCHAR(dt, ``'Mon ``YYYY')``                           |
+| ``YEAR_MONTH_TEXT``| Generated | `TO_VARCHAR(dt, 'YYYY') | | '-' | | LPAD(MONTH(dt), 2, '0')` |
+```
 
 ### Purpose
 - Supports Power BI time intelligence (YTD, MTD, rolling 12 months)
@@ -401,16 +407,133 @@ SERVICE_CATEGORY_DIM (SERVICE_CATEGORY)
    - FACT table enriched with provider names, HCPCS descriptions, state locations via LEFT JOIN
    - Missing dimension values result in NULL enrichment fields
 
-
 ---
 
-## 📊 10. Power BI Semantic Model Usage
+## 10. This section defines the complete Source‑to‑Target (S2T) mapping for the Medicaid Provider Spending pipeline, including:
+
+- Source → FACT_MEDICAID_PROVIDER_SPENDING
+- FACT_MEDICAID_PROVIDER_SPENDING → FACT_PROVIDER_MONTHLY
+- FACT_MEDICAID_PROVIDER_SPENDING → FACT_HCPCS_MONTHLY
+- Data types, nullability, alignment rules
+- Ingestion validation rules
+- Column‑shift detection logic
+- Error handling and quarantine rules
+
+For details on the 2018 data quality incident and remediation steps, see:
+`16_Data_quality_incident.md`
+
+10.1. Source → FACT_MEDICAID_PROVIDER_SPENDING
+> 10.1.1 Source Schema (Raw Medicaid Provider Spending File)
+| Column | Type | Notes |
+| --- | --- | --- |
+| BILLING_PROVIDER_NPI | STRING | Must be 10 digits |
+| BILLING_PROVIDER_STATE | STRING | 2‑letter state |
+| SERVICING_PROVIDER_NPI | STRING | Must be 10 digits |
+| SERVICING_PROVIDER_STATE | STRING | 2‑letter state |
+| HCPCS_CODE | STRING | Must match HCPCS master |
+| HCPCS_DESCRIPTION | STRING | From HCPCS master |
+| HCPCS_SHORT_DESCRIPTION | STRING | From HCPCS master |
+| HCPCS_STATUS | STRING | From HCPCS master |
+| SERVICE_CATEGORY | STRING | Derived |
+| CLAIM_MONTH | DATE | YYYY‑MM‑01 |
+| TOTAL_CLAIM_LINES | NUMBER | Raw count |
+| TOTAL_PAID | NUMBER | Raw paid amount |
+| TOTAL_PATIENTS | NUMBER | Raw count |
+
+> 10.1.2 Target Schema (FACT_MEDICAID_PROVIDER_SPENDING)
+Same as source, with enforced constraints:
+- NPIs must be 10‑digit numeric strings
+- HCPCS_CODE cannot be NULL
+- TOTAL_PAID must be numeric and < $100M
+- CLAIM_MONTH must be a valid month boundary
+
+> 10.1.3 Mapping Table
+| Source Column | Target Column | Transform | Notes |
+| --- | --- | --- | --- |
+| BILLING_PROVIDER_NPI | BILLING_PROVIDER_NPI | Direct | Validate 10 digits |
+| BILLING_PROVIDER_STATE | BILLING_PROVIDER_STATE | Direct | Uppercase |
+| SERVICING_PROVIDER_NPI | SERVICING_PROVIDER_NPI | Direct | Validate 10 digits |
+| SERVICING_PROVIDER_STATE | SERVICING_PROVIDER_STATE | Direct | Uppercase |
+| HCPCS_CODE | HCPCS_CODE | Direct | Validate against HCPCS master |
+| HCPCS_DESCRIPTION | HCPCS_DESCRIPTION | Direct | From HCPCS master |
+| HCPCS_SHORT_DESCRIPTION | HCPCS_SHORT_DESCRIPTION | Direct | From HCPCS master |
+| HCPCS_STATUS | HCPCS_STATUS | Direct | From HCPCS master |
+| SERVICE_CATEGORY | SERVICE_CATEGORY | Direct | Derived |
+| CLAIM_MONTH | CLAIM_MONTH | Cast to DATE | Must be YYYY‑MM‑01 |
+| TOTAL_CLAIM_LINES | TOTAL_CLAIM_LINES | SUM | Aggregated in monthly tables |
+| TOTAL_PAID | TOTAL_PAID | SUM | Must be < $100M |
+| TOTAL_PATIENTS | TOTAL_PATIENTS | SUM | Aggregated in monthly tables |
+
+10.2. FACT_MEDICAID_PROVIDER_SPENDING → FACT_PROVIDER_MONTHLY
+10.2.1 Grouping Keys
+- CLAIM_MONTH
+- BILLING_PROVIDER_NPI
+- BILLING_PROVIDER_STATE
+- SERVICING_PROVIDER_NPI
+- SERVICING_PROVIDER_STATE
+- SERVICE_CATEGORY
+
+10.2.2 Measures
+- SUM(TOTAL_CLAIM_LINES)
+- SUM(TOTAL_PAID)
+- SUM(TOTAL_PATIENTS)
+
+10.3. FACT_MEDICAID_PROVIDER_SPENDING → FACT_HCPCS_MONTHLY
+10.3.1 Grouping Keys
+- CLAIM_MONTH
+- HCPCS_CODE
+- HCPCS_DESCRIPTION
+- HCPCS_SHORT_DESCRIPTION
+- HCPCS_STATUS
+- BILLING_PROVIDER_NPI
+- BILLING_PROVIDER_STATE
+- SERVICING_PROVIDER_NPI
+- SERVICING_PROVIDER_STATE
+- SERVICE_CATEGORY
+
+10.3.2 Measures
+- SUM(TOTAL_CLAIM_LINES)
+- SUM(TOTAL_PAID)
+- SUM(TOTAL_PATIENTS)
+
+10.4. Ingestion Validation Rules
+10.4.1 Column Alignment Validation
+- Validate column count
+- Validate column order
+- Validate data types
+- Reject rows with misaligned fields
+
+10.4.2 NPI Validation
+- Must be 10 digits
+- Reject NULL NPIs
+
+10.4.3 HCPCS Validation
+- Must exist in HCPCS master
+- Reject NULL HCPCS
+
+10.4.4 TOTAL_PAID Validation
+- Reject values > $100M at atomic level
+- Reject values > $1B at stage level
+
+10.4.5 Column‑Shift Detection
+- Detect NULL HCPCS + invalid NPI + huge TOTAL_PAID
+- Detect repeating‑digit patterns
+- Detect non‑numeric TOTAL_PAID
+
+4.6 Quarantine Rules
+Malformed rows are moved to:
+```code
+STAGE_MEDICAID.QUARANTINE.MEDICAID_PROVIDER_SPENDING_BAD_ROWS
+```
+---
+
+## 📊 11. Power BI Semantic Model Usage
 
 ### Star Schema in Power BI
 
 The MODEL layer tables are consumed directly by Power BI as a star schema:
 
-- **Fact Table**: `FACT_MEDICAID_PROVIDER_SPENDING`
+- **Fact Table**: `FACT_MEDICAID_PROVIDER_SPENDING`(Direct Query), FACT_PROVIDER_MONTHLY, FACT_HCPCS_MONTHLY 
 - **Dimensions**: `NPI_DIM`, `HCPCS_DIM`, `DATE_DIM`, `SERVICE_CATEGORY_DIM`
 
 ### Key Fields for Power BI Visuals
@@ -441,7 +564,7 @@ See `docs/09_powerbi_dashboard.md` for:
 
 ---
 
-## 🧭 11. How to Use This Document
+## 🧭 12. How to Use This Document
 
 ### Engineers
 - Implement SQL transformations based on documented lineage
@@ -465,7 +588,7 @@ See `docs/09_powerbi_dashboard.md` for:
 
 ---
 
-## 🧩 12. Why S2T Matters in Medicaid / EDS Work
+## 🧩 13. Why S2T Matters in Medicaid / EDS Work
 
 State Medicaid programs and Enterprise Data Systems rely on:
 
@@ -487,7 +610,7 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
 
 ---
 
-## 🗂️ 13. Versioning & Change Log
+## 🗂️ 14. Versioning & Change Log
 
 | Version | Date       | Author           | Description                                                                             |
 |---------|------------|------------------|-----------------------------------------------------------------------------------------|
@@ -497,12 +620,14 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
                                           | added SERVICE_CATEGORY logic, enhanced geographic standardization section, added complete transformation logic summary, expanded join relationships section, 
                                           | added Power BI usage guidance |
 | **2.1** | 2026-05-07 | Mairilyn Yera    | Corrected Full_Name construction, added Provider_Display_Name, Provider_Type and Data_Quality_Flag
+| **2.2** | 2026-05-10 | Mairilyn Yera    | Added section 10 on mapping for the Medicaid Provider Spending pipeline and updated section 11 to include 2 new Fact tales
+
 
 **Note**: All changes follow semantic versioning and include brief descriptions of modifications.
 
 ---
 
-## 📁 14. SQL Reference Files
+## 📁 15. SQL Reference Files
 
 | Layer | Table/Object | SQL File |
 |-------|-------------|----------|
