@@ -620,7 +620,7 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
                                           | added SERVICE_CATEGORY logic, enhanced geographic standardization section, added complete transformation logic summary, expanded join relationships section, 
                                           | added Power BI usage guidance |
 | **2.1** | 2026-05-07 | Mairilyn Yera    | Corrected Full_Name construction, added Provider_Display_Name, Provider_Type and Data_Quality_Flag
-| **2.2** | 2026-05-10 | Mairilyn Yera    | Added section 10 on mapping for the Medicaid Provider Spending pipeline and updated section 11 to include 2 new Fact tales
+| **2.2** | 2026-05-10 | Mairilyn Yera    | Added section 10 on mapping for the Medicaid Provider Spending pipeline and updated section 11 to include 2 new Fact tables
 
 
 **Note**: All changes follow semantic versioning and include brief descriptions of modifications.
@@ -637,6 +637,8 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
 | **STAGE** | `MEDICAID_PROVIDER_SPENDING_STAGE` | `sql/medicaid_clean_stage.sql` |
 | **STAGE** | `HCPCS_CLEAN` | `sql/hcpcs_clean.sql` |
 | **STAGE** | `NPI_CLEAN` | `sql/provider_clean.sql` |
+| **STAGE** | `MEDICAID_PROVIDER_SPENDING_STAGE` | `sql/data_incident/isolatingoutliersfact_table.sql` |
+| **STAGE** | `MEDICAID_PROVIDER_SPENDING_STAGE` | `sql/data_incident/removeoutliersfact_table.sql` |
 | **MODEL** | `NPI_DIM` | `sql/provider_dimension.sql` |
 | **MODEL** | `HCPCS_DIM` | `sql/hcpcs_dimension.sql` |
 | **MODEL** | `DATE_DIM` | `sql/model/date_and_service_dimensions.sql` |
