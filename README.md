@@ -67,7 +67,7 @@ This repository includes all documentation, SQL scripts, data modeling logic, an
 
 ### Warehouse
 ```code
-Warehouse: WH_MEDICAID_ETL
+Warehouse: COMPUTE_WH
 Size: XSMALL
 Purpose: Ingestion + transforms
 Auto-suspend: 60 seconds
