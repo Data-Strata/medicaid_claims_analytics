@@ -11,48 +11,88 @@ Both dimensions are generated programmatically and do not originate from a sourc
 # 🗓️ 1. DATE_DIM — Date Dimension
 Purpose
 The Medicaid dataset includes service dates but does not provide a dedicated date dimension.
-DATE_DIM enables:
-- Time intelligence (YTD, MTD, rolling 12 months)
+DATE_DIM provides:
+- Time intelligence (YTD, MTD, rolling 12M)
 - Calendar hierarchies (Year → Quarter → Month → Day)
 - Consistent reporting across FACT tables
-- Power BI relationships and slicers
+- A clean relationship to FACT.CLAIM_MONTH
+- Power BI‑ready fields (DATE_KEY, YEAR_MONTH, MONTH_NAME)
 
-Grain:
+Grain
 1 row per calendar date
+(2018‑01‑01 → 2027‑12‑31)
 
-Source:
-Generated programmatically using a date range derived from the FACT table (CLAIM_MONTH).
+Source
+Generated programmatically in the MODEL layer.
+Not sourced from RAW or STAGE.
 
-| Column | Type | Description |
-| --- | --- | --- |
-| ``DATE_KEY`` | NUMBER | Surrogate key in YYYYMMDD format |
-| ``DATE`` | DATE | Actual calendar date |
-| ``YEAR`` | NUMBER | Calendar year |
-| ``QUARTER`` | NUMBER | Calendar quarter (1–4) |
-| ``MONTH`` | NUMBER | Calendar month (1–12) |
-| ``MONTH_NAME`` | VARCHAR | Full month name (e.g., “January”) |
-| ``YEAR_MONTH`` | VARCHAR | BI-friendly label (YYYY‑MM) |
-| ``DAY_OF_MONTH`` | NUMBER | Day of month (1–31) |
-| ``DAY_NAME`` | VARCHAR | Day of week name |
-| ``IS_WEEKEND`` | BOOLEAN | Weekend indicator |
+🧱 DATE_DIM Schema (Updated)
+| Column              | Type     | Description |
+| ------------------- | -------- | ------------------------------------------------------- |
+| ``DATE_KEY``        | **DATE** | Primary key used for FACT joins (must match CLAIM_MONTH) |
+| ``YEAR``            | NUMBER   | Calendar year |
+| ``QUARTER``         | NUMBER   | Calendar quarter (1–4) |
+| ``MONTH``           | NUMBER   | Calendar month (1–12) |
+| ``MONTH_NAME``      | VARCHAR  | Full month name |
+| ``YEAR_MONTH``      | VARCHAR  | BI-friendly label (YYYYMM) |
+| ``DAY_OF_MONTH``    | NUMBER   | Day of month |
+| ``DAY_NAME``        | VARCHAR  | Day of week name |
+| ``DAY_OF_WEEK``     | NUMBER   | Numeric day of week |
+| ``WEEK_OF_YEAR``    | NUMBER   | Week number |
+| ``DATE_TEXT``       | VARCHAR  | YYYY‑MM‑DD text format |
+| ``MONTH_NAME_YEAR`` | VARCHAR  | “Mon YYYY” |
+| ``YEAR_MONTH_TEXT`` | VARCHAR  | “YYYY‑MM” |
 
-Transformation Logic:
-DATE_DIM is generated using a date series:
+🛠️ Transformation Logic (Updated SQL)
+
 ```sql
-SELECT 
-    TO_NUMBER(TO_CHAR(d, 'YYYYMMDD')) AS DATE_KEY,
-    d AS DATE,
-    YEAR(d) AS YEAR,
-    QUARTER(d) AS QUARTER,
-    MONTH(d) AS MONTH,
-    TO_CHAR(d, 'Month') AS MONTH_NAME,
-    TO_CHAR(d, 'YYYY-MM') AS YEAR_MONTH,
-    DAY(d) AS DAY_OF_MONTH,
-    TO_CHAR(d, 'Day') AS DAY_NAME,
-    CASE WHEN DAYOFWEEK(d) IN (6,7) THEN TRUE ELSE FALSE END AS IS_WEEKEND
-FROM TABLE(GENERATOR(ROWCOUNT => 20000))  -- ~55 years of dates
-QUALIFY d BETWEEN '2000-01-01' AND CURRENT_DATE();
+CREATE OR REPLACE TABLE ANALYTICS_MEDICAID.MODEL.DATE_DIM AS
+WITH RECURSIVE dates AS (
+    SELECT DATE('2018-01-01') AS dt
+    UNION ALL
+    SELECT DATEADD(day, 1, dt)
+    FROM dates
+    WHERE dt < DATE('2027-12-31')
+)
+SELECT
+    dt AS DATE_KEY,                         -- Must be DATE (not TIMESTAMP)
+    YEAR(dt) AS YEAR,
+    QUARTER(dt) AS QUARTER,
+    MONTH(dt) AS MONTH,
+    TO_CHAR(dt, 'Month') AS MONTH_NAME,
+    TO_CHAR(dt, 'YYYYMM') AS YEAR_MONTH,
+    DAY(dt) AS DAY_OF_MONTH,
+    TO_CHAR(dt, 'Day') AS DAY_NAME,
+    DAYOFWEEK(dt) AS DAY_OF_WEEK,
+    WEEKOFYEAR(dt) AS WEEK_OF_YEAR,
+    TO_VARCHAR(dt, 'YYYY-MM-DD') AS DATE_TEXT,
+    TO_VARCHAR(dt, 'Mon YYYY') AS MONTH_NAME_YEAR,
+    TO_VARCHAR(dt, 'YYYY') || '-' || LPAD(MONTH(dt), 2, '0') AS YEAR_MONTH_TEXT
+FROM dates
+ORDER BY dt;
 ```
+
+🔗 Integration With FACT Table (Updated)
+FACT_MEDICAID_PROVIDER_SPENDING uses:
+```code
+| FACT Column     | DATE_DIM Column | Notes |
+| --------------- | --------------- | ------- |
+| ``CLAIM_MONTH`` | ``DATE_KEY``    | Both must be **DATE** datatype |
+| ``CLAIM_MONTH`` always uses the **first day of the month** | DATE_DIM contains all days | Relationship works because DATE_KEY is DATE |
+```
+
+Relationship Rules
+ - FACT → DATE_DIM
+ - CLAIM_MONTH → DATE_KEY
+ - Many‑to‑One
+ - Single direction
+ - Active
+
+Power BI Sorting
+YEAR_MONTH → Sort by → DATE_KEY
+
+Axis for trend charts → DATE_KEY (continuous)
+
 
 🏥 2. SERVICE_CATEGORY_DIM — Clinical Service Grouping
 Purpose
