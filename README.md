@@ -153,14 +153,18 @@ medicaid_claims_analytics/
 │   │
 │   ├── ── Provider (NPI) Pipeline ───────────────────
 │   ├── provider_ingestion_raw.sql          # RAW table (INFER_SCHEMA) + COPY INTO
-│   ├── provider_clean.sql                  # CLEAN table (11 analytics fields) -------------------check
+│   ├── provider_clean.sql                  # CLEAN table (22 analytics fields)
 │   ├── provider_dimension.sql              # DIM_PROVIDER (deduplicated by NPI)
 │   ├── provider_quality_checks.sql         # Row-count + duplicate validations
 │   ├── provider_full_pipeline.sql          # End-to-end orchestration 
 │   │
 │   ├── ── Model ───────────────────   
 │   ├── date_and_service_dimensions.sql     # Creates DATE_DIM and SERVICE_DIM for BI semantic modeling
-│   └── clean_provider_states.sql           # Standardizes PRACTICE_STATE and MAILING_STATE into U.S. state abbreviations (MODEL layer)
+│   ├── clean_provider_states.sql           # Standardizes PRACTICE_STATE and MAILING_STATE into U.S. state abbreviations (MODEL layer)
+│   │   
+│   ├── ── Data_Incident ───────────────────   
+│   ├── isolatingoutliersfact_table.sql     # Isolating outliers from fact_table
+│   └── removeoutliersfact_table.sql        # Remove outliers from fact_table
 │
 ├── data/
 │   └── README.md   # Dataset overview + source link
