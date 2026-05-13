@@ -163,8 +163,8 @@ medicaid_claims_analytics/
 │   ├── clean_provider_states.sql           # Standardizes PRACTICE_STATE and MAILING_STATE into U.S. state abbreviations (MODEL layer)
 │   │   
 │   ├── ── Data_Incident ───────────────────   
-│   ├── isolatingoutliersfact_table.sql     # Isolating outliers from fact_table
-│   └── removeoutliersfact_table.sql        # Remove outliers from fact_table
+│   ├── isolatingoutliersfact_table.sql     # Isolating outliers from fact_table (STAGE layer)
+│   └── removeoutliersfact_table.sql        # Remove outliers from fact_table (STAGE layer)
 │
 ├── data/
 │   └── README.md   # Dataset overview + source link
@@ -214,6 +214,12 @@ medicaid_claims_analytics/
 | ---------------------------------   | -------------------------------------------------------------- |
 | ``clean_provider_states.sql``       | Standardizes PRACTICE_STATE and MAILING_STATE into U.S. states |
 | ``date_and_service_dimensions.sql`` | Creates DATE_DIM and SERVICE_DIM for BI semantic modeling      |
+
+### data_incident 
+| Script                              | Purpose                                                        |
+| ---------------------------------   | -------------------------------------------------------------- |
+| ``isolatingoutliersfact_table.sql`` | Finds if there are outliers in data caused from ingestion into STAGE |
+| ``removeoutliersfact_table.sql``    | Removes outliers from STAGE layer if they exist        |
 
 # 🟦 Provider Data Quality Analysis (NPI Integration)
 
