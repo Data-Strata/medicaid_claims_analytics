@@ -132,7 +132,9 @@ medicaid_claims_analytics/
 │   ├── 11_s2t_mapping.md                 # Source‑to‑Target lineage (updated with geographic standardization)
 │   ├── 12_NPI_data_quality_analysis.md   # Technical appendix on unmatched NPI categories & anomaly tables|
 │   ├── 13_geographic_standardization.md  # PRACTICE_STATE/MAILING_STATE cleanup + STATE_REF logic  
-│   └── 14_Medicaid_data_glossary.md      # Medicaid data glossary
+│   ├── 14_Medicaid_data_glossary.md      # Medicaid data glossary
+│   ├── 15_date_and_service_dimensions.md # DATE_DIM + SERVICE_CATEGORY_DIM documentation   
+│   └── 16_data_quality_incident.md       # data incident & integrity documentation
 │
 ├── sql/
 │   ├── ── Medicaid Pipeline ──────────────────────────
@@ -323,9 +325,10 @@ This creates a clean, well‑defined star schema optimized for analytics.
 | `docs/10_results_and_insights.md`          | Findings + analytics summary (planned) |
 | `docs/11_s2t_mapping.md`                   | Source to Target mapping |
 | `docs/12_NPI_data_quality_analysis.md`     | Technical appendix on unmatched NPI categories & anomaly tables|
-| `docs/13_geographic_standardization.md`    | PRACTICE_STATE/MAILING_STATE cleanup + STATE_REF logic  
-| `docs/14_Medicaid_data_glossary.md`        | Medicaid data glossary
-| `docs/15_date_and_service_dimensions.md`   | DATE_DIM + SERVICE_CATEGORY_DIM documentation
+| `docs/13_geographic_standardization.md`    | PRACTICE_STATE/MAILING_STATE cleanup + STATE_REF logic | 
+| `docs/14_Medicaid_data_glossary.md`        | Medicaid data glossary |
+| `docs/15_date_and_service_dimensions.md`   | DATE_DIM + SERVICE_CATEGORY_DIM documentation |
+| `docs/16_data_quality_incident.md`         | data incident & integrity documentation |
 
 ## 🛠️ Technologies Used
 
