@@ -138,16 +138,16 @@ This layer produces a fully analytics‑ready provider table with:
 - Removal of empty placeholder NPIs
 - Preservation of 23 legitimate nameless organizations
 
-Key Transformations
-1. Identifier Normalization
+## 🛠️ Key Transformations
+### 1. Identifier Normalization
 LPAD(TRIM(NPI), 10, '0') ensures all NPIs are 10‑digit strings.
 
-2. Name Field Cleaning
+### 2. Name Field Cleaning
 - Removes invisible characters (tabs, NBSP, control chars).
 - Converts empty strings to NULL.
 - Cleans FIRST_NAME, MIDDLE_NAME, LAST_NAME before constructing FULL_NAME.
 
-3. Correct FULL_NAME Construction (Snowflake‑Safe)
+### 3. Correct FULL_NAME Construction (Snowflake‑Safe)
 Snowflake’s CONCAT_WS returns NULL when any argument is NULL.
 To avoid losing FULL_NAME for 3.6M+ individuals, the CLEAN layer uses:
 
@@ -167,24 +167,24 @@ TRIM(
 )
 
 ```
-4. ZIP Code Normalization
+### 4. ZIP Code Normalization
 - Extracts 5‑digit ZIPs from 5–9 digit fields.
 - Invalid ZIPs → NULL.
 
-5. Date Normalization
+### 5. Date Normalization
 - TRY_TO_DATE for enumeration and last update dates.
 
-6. Primary Taxonomy Selection
+### 6. Primary Taxonomy Selection
 - Uses taxonomy code where PRIMARY_TAXONOMY_SWITCH = 'Y'.
 
-7. Removal of Empty Providers
+### 7. Removal of Empty Providers
 - Rows where all identifying fields are NULL are excluded:
 + FIRST_NAME
 + LAST_NAME
 + ORG_NAME
 + ENTITY_TYPE_CODE
 
-8. Removal of Invalid or Non‑Informative Names (Name Sanitization Rules)
+### 8. Removal of Invalid or Non‑Informative Names (Name Sanitization Rules)
 As part of the NPI_CLEAN transformation, provider names undergo a standardized cleaning process to remove invalid, non‑informative, or system‑generated placeholder values. 
 The following rules apply to FIRST_NAME, MIDDLE_NAME, LAST_NAME, and ORG_NAME:
 
@@ -218,7 +218,7 @@ Any name field that becomes empty after cleaning is set to NULL, ensuring that:
 - Provider_Display_Name falls back correctly
 - DATA_QUALITY_FLAG accurately identifies missing names
 
-9. Preservation of 23 Nameless Organizations
+### 9. Preservation of 23 Nameless Organizations
 After cleaning, 23 NPIs remain where:
 > ENTITY_TYPE_CODE = 2
 > ORG_NAME = NULL
