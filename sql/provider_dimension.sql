@@ -20,27 +20,43 @@ WITH ranked AS (
     FROM STAGE_MEDICAID.CLEAN.NPI_CLEAN
 )
 SELECT
+    /* Core Identifiers */
     NPI,
     ENTITY_TYPE_CODE,
     REPLACEMENT_NPI,
+
+    /* Names */
     ORG_NAME,
     LAST_NAME,
     FIRST_NAME,
     MIDDLE_NAME,
     CREDENTIALS,
     FULL_NAME,
+
+    /* Derived Name Fields */
+    PROVIDER_TYPE,
+    PROVIDER_DISPLAY_NAME,
+    DATA_QUALITY_FLAG,
+
+    /* Addresses */
     MAILING_CITY,
     MAILING_STATE,
     MAILING_ZIP,
     PRACTICE_CITY,
     PRACTICE_STATE,
     PRACTICE_ZIP,
+
+    /* Dates */
     ENUMERATION_DATE,
     LAST_UPDATE_DATE,
+
+    /* Other Attributes */
     GENDER,
     PRIMARY_TAXONOMY_CODE
+
 FROM ranked
 WHERE rn = 1;
+
 
 -- Validation
 SELECT COUNT(*) AS DIM_ROW_COUNT FROM NPI_DIM;
