@@ -20,7 +20,7 @@ Medicaid and HCPCS use `@MEDICAID_EXTRACTED`; NPI uses its own dedicated `@NPI_E
 
 External NPI CSV → @NPI_EXTRACTED → NPI_RAW (330 cols, all STRING)
 ↓
-NPI_CLEAN (11 analytics fields, typed)
+NPI_CLEAN (23 analytics fields, typed)
 ↓
 NPI_DIM (1 row per NPI, deduplicated)
 
@@ -184,7 +184,41 @@ TRIM(
 + ORG_NAME
 + ENTITY_TYPE_CODE
 
-8. Preservation of 23 Nameless Organizations
+8. Removal of Invalid or Non‑Informative Names (Name Sanitization Rules)
+As part of the NPI_CLEAN transformation, provider names undergo a standardized cleaning process to remove invalid, non‑informative, or system‑generated placeholder values. 
+The following rules apply to FIRST_NAME, MIDDLE_NAME, LAST_NAME, and ORG_NAME:
+
+- Name Cleaning Logic
+The pipeline removes or normalizes:
+
+- Names composed entirely of digits or punctuation  
+Examples removed:
+"-", ".", "1", "#", "#1", "..."
+
+- Names beginning with punctuation  
+Examples cleaned:
+".A.L.KARNS" → "A L KARNS"  
+":SMITH" → "SMITH"
+
+- Repeated punctuation sequences  
+"A..B" → "A B"
+
+- Embedded credentials after commas  
+".A.L.KARNS,D.C.P.C." → "A L KARNS"
+
+- Leading zeros in organization names  
+"0013 ELISABETH LUDEMAN CENTER" → "ELISABETH LUDEMAN CENTER"
+
+- Whitespace normalization  
+Multiple spaces and invisible characters are removed.
+
+Result
+Any name field that becomes empty after cleaning is set to NULL, ensuring that:
+- FULL_NAME is constructed only from valid components
+- Provider_Display_Name falls back correctly
+- DATA_QUALITY_FLAG accurately identifies missing names
+
+9. Preservation of 23 Nameless Organizations
 After cleaning, 23 NPIs remain where:
 > ENTITY_TYPE_CODE = 2
 > ORG_NAME = NULL
