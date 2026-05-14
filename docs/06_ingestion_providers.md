@@ -203,13 +203,53 @@ WITH CLEANED AS (
         NULLIF(TRIM(ENTITY_TYPE_CODE), '') AS ENTITY_TYPE_CODE,
         NULLIF(TRIM(REPLACEMENT_NPI), '') AS REPLACEMENT_NPI,
 
-        /* Clean Individual Name Fields */
-        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_FIRST_NAME), '[[:space:]]+', ''), '') AS FIRST_NAME,
-        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_MIDDLE_NAME), '[[:space:]]+', ''), '') AS MIDDLE_NAME,
-        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_LAST_NAME_LEGAL_NAME), '[[:space:]]+', ''), '') AS LAST_NAME,
+/* ---------------------------------------------------------
+           Name Cleaning Rules
+           - Strip leading punctuation
+           - Remove pure punctuation/digit names
+           - Collapse repeated punctuation
+           - Remove credentials after commas
+           - Normalize whitespace
+        --------------------------------------------------------- */
 
-        /* Organization Name */
-        NULLIF(TRIM(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME), '') AS ORG_NAME,
+        /* FIRST NAME */
+         CASE
+            WHEN REGEXP_LIKE(PROVIDER_FIRST_NAME, '^[0-9[:punct:]]+$') THEN NULL
+            ELSE NULLIF(
+                REGEXP_REPLACE(
+                    REGEXP_REPLACE(
+                        REGEXP_REPLACE(
+                            TRIM(PROVIDER_FIRST_NAME),
+                            '^[[:punct:]]+', ''        -- leading punctuation
+                        ),
+                        '[[:punct:]]{2,}', ' '        -- repeated punctuation
+                    ),
+                    ',.*$', ''                        -- remove credentials after comma
+                ),
+            '')
+        END AS FIRST_NAME,
+
+        /* Same applied to MIDDLE_NAME and LAST_NAME ...
+
+       /* ORGANIZATION NAME */
+        CASE
+         WHEN REGEXP_LIKE(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME, '^[0-9[:punct:]]+$') THEN NULL
+            ELSE NULLIF(
+                REGEXP_REPLACE(
+                  REGEXP_REPLACE(
+                     REGEXP_REPLACE(
+                           REGEXP_REPLACE(
+                              TRIM(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME),
+                             '^0+([A-Za-z])', '\\1'   -- remove leading zeros before letters
+                         ),
+                            '^[[:punct:]]+', ''        -- leading punctuation
+                       ),
+                        '[[:punct:]]{2,}', ' '        -- repeated punctuation
+                 ),
+                 ',.*$', ''                        -- remove credentials after comma
+               ),
+         '')
+        END AS ORG_NAME,
 ```
 (Section continues with ZIP normalization, dates, taxonomy, and FULL_NAME logic.)
 
