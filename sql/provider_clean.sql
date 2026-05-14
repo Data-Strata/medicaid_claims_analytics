@@ -17,17 +17,84 @@ WITH CLEANED AS (
         NULLIF(TRIM(ENTITY_TYPE_CODE), '')                                                  AS ENTITY_TYPE_CODE,
         NULLIF(TRIM(REPLACEMENT_NPI), '')                                                   AS REPLACEMENT_NPI,
 
-        /* ---------------------------------------------------------
-           Clean Individual Name Fields (remove invisible characters)
+/* ---------------------------------------------------------
+           Name Cleaning Rules
+           - Strip leading punctuation
+           - Remove pure punctuation/digit names
+           - Collapse repeated punctuation
+           - Remove credentials after commas
+           - Normalize whitespace
         --------------------------------------------------------- */
-        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_FIRST_NAME), '[[:space:]]+', ''), '')           AS FIRST_NAME,
-        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_MIDDLE_NAME), '[[:space:]]+', ''), '')          AS MIDDLE_NAME,
-        NULLIF(REGEXP_REPLACE(TRIM(PROVIDER_LAST_NAME_LEGAL_NAME), '[[:space:]]+', ''), '') AS LAST_NAME,
 
-        /* ---------------------------------------------------------
-           Organization Name
-        --------------------------------------------------------- */
-        NULLIF(TRIM(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME), '')                    AS ORG_NAME,
+        /* FIRST NAME */
+         CASE
+            WHEN REGEXP_LIKE(PROVIDER_FIRST_NAME, '^[0-9[:punct:]]+$') THEN NULL
+            ELSE NULLIF(
+                REGEXP_REPLACE(
+                    REGEXP_REPLACE(
+                        REGEXP_REPLACE(
+                            TRIM(PROVIDER_FIRST_NAME),
+                            '^[[:punct:]]+', ''        -- leading punctuation
+                        ),
+                        '[[:punct:]]{2,}', ' '        -- repeated punctuation
+                    ),
+                    ',.*$', ''                        -- remove credentials after comma
+                ),
+            '')
+        END AS FIRST_NAME,
+
+        /* MIDDLE NAME */
+        CASE
+            WHEN REGEXP_LIKE(PROVIDER_MIDDLE_NAME, '^[0-9[:punct:]]+$') THEN NULL
+            ELSE NULLIF(
+                REGEXP_REPLACE(
+                    REGEXP_REPLACE(
+                        REGEXP_REPLACE(
+                            TRIM(PROVIDER_MIDDLE_NAME),
+                            '^[[:punct:]]+', ''
+                        ),
+                        '[[:punct:]]{2,}', ' '
+                    ),
+                    ',.*$', ''
+                ),
+            '')
+        END AS MIDDLE_NAME,
+
+        /* LAST NAME */
+        CASE
+            WHEN REGEXP_LIKE(PROVIDER_LAST_NAME_LEGAL_NAME, '^[0-9[:punct:]]+$') THEN NULL
+            ELSE NULLIF(
+                REGEXP_REPLACE(
+                    REGEXP_REPLACE(
+                        REGEXP_REPLACE(
+                            TRIM(PROVIDER_LAST_NAME_LEGAL_NAME),
+                            '^[[:punct:]]+', ''
+                        ),
+                        '[[:punct:]]{2,}', ' '
+                    ),
+                    ',.*$', ''
+                ),
+            '')
+        END AS LAST_NAME,
+        /* ORGANIZATION NAME */
+        CASE
+         WHEN REGEXP_LIKE(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME, '^[0-9[:punct:]]+$') THEN NULL
+            ELSE NULLIF(
+                REGEXP_REPLACE(
+                  REGEXP_REPLACE(
+                     REGEXP_REPLACE(
+                           REGEXP_REPLACE(
+                              TRIM(PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME),
+                             '^0+([A-Za-z])', '\\1'   -- remove leading zeros before letters
+                         ),
+                            '^[[:punct:]]+', ''        -- leading punctuation
+                       ),
+                        '[[:punct:]]{2,}', ' '        -- repeated punctuation
+                 ),
+                 ',.*$', ''                        -- remove credentials after comma
+               ),
+         '')
+        END AS ORG_NAME,
 
         /* ---------------------------------------------------------
            Credentials
@@ -80,20 +147,55 @@ WITH CLEANED AS (
 ),
 
 /* ---------------------------------------------------------
-   Build FULL_NAME from cleaned fields (Snowflake-safe)
+   Build FULL_NAME and Derived Fields
 --------------------------------------------------------- */
 FINAL AS (
     SELECT
         *,
+        
+        /* -----------------------------------------------------
+           FULL_NAME 
+        ----------------------------------------------------- */
         TRIM(
             CONCAT(
                 FIRST_NAME,
                 CASE WHEN MIDDLE_NAME IS NOT NULL THEN ' ' || MIDDLE_NAME ELSE '' END,
                 CASE WHEN LAST_NAME IS NOT NULL THEN ' ' || LAST_NAME ELSE '' END
             )
-        )                                                                                  AS FULL_NAME
+        ) AS FULL_NAME,
+
+        /* -----------------------------------------------------
+           Provider_Type (Individual vs Organization)
+        ----------------------------------------------------- */
+        CASE
+            WHEN ENTITY_TYPE_CODE = '1' THEN 'Individual'
+            WHEN ENTITY_TYPE_CODE = '2' THEN 'Organization'
+            ELSE NULL
+        END AS PROVIDER_TYPE,
+
+        /* -----------------------------------------------------
+           Provider_Display_Name
+           Priority: FULL_NAME → ORG_NAME → "Unknown Organization"
+        ----------------------------------------------------- */
+        CASE
+            WHEN FULL_NAME IS NOT NULL THEN FULL_NAME
+            WHEN ORG_NAME IS NOT NULL THEN ORG_NAME
+            ELSE 'Unknown Organization'
+        END AS PROVIDER_DISPLAY_NAME,
+
+        /* -----------------------------------------------------
+           Data_Quality_Flag
+           Flag missing names for organizations
+        ----------------------------------------------------- */
+        CASE
+            WHEN FULL_NAME IS NULL AND ORG_NAME IS NULL
+                THEN 'NAME_MISSING_ORG'
+            ELSE 'VALID'
+        END AS DATA_QUALITY_FLAG
+
     FROM CLEANED
 )
+
 
 /* ---------------------------------------------------------
    Remove rows where ALL identifying fields are NULL
