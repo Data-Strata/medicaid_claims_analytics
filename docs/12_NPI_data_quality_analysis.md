@@ -214,19 +214,9 @@ GROUP BY MATCH_STATUS;
         +-------------------------------+
 
 ```
-🟦 8. Narrative Summary (Portfolio‑Ready)
-The integration between Medicaid Provider‑Level Spending and the NPI Registry achieved a 96.69% match rate, validating the accuracy of the RAW → CLEAN → MODEL pipeline.
 
-The unmatched 3.31% of NPIs represent real‑world Medicaid billing anomalies, including placeholder NPIs, legacy state identifiers, deactivated NPIs, and non‑NPI billing constructs. These patterns are expected in national Medicaid datasets and do not indicate pipeline issues.
+For the full Provider Integrity Framework and MODEL‑layer integration, see Section 11 of `07_data_modeling.md`.
 
-This analysis demonstrates:
-- Strong data quality controls
-- Accurate provider normalization
-- Robust dimensional modeling
-- Deep understanding of healthcare billing systems
-- Transparency in documenting data limitations
-
-This document serves as a technical appendix supporting the reliability of the provider enrichment layer in the analytics model.
 
 
 
