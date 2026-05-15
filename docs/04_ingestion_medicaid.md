@@ -124,17 +124,69 @@ ON_ERROR = 'CONTINUE';
 ```
 
 ## 🟦 8. CLEAN Stage Table
-SQL file: sql/medicaid_clean_stage.sql
+SQL file: `sql/medicaid_clean_stage.sql`
 
-Excerpt:
+The CLEAN stage standardizes raw Medicaid provider spending data, applies structural validation,
+redirects malformed rows to a Quarantine table, and loads only valid rows into the
+`MEDICAID_PROVIDER_SPENDING_STAGE` table.
+
+### Quarantine Table Creation (Inline in STAGE Script)
+
+The STAGE script ensures the Quarantine schema and table exist:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS STAGE_MEDICAID.QUARANTINE;
+
+CREATE TABLE IF NOT EXISTS STAGE_MEDICAID.QUARANTINE.MEDICAID_PROVIDER_SPENDING_BAD_ROWS (
+    LOAD_TIMESTAMP      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    SOURCE_FILE_NAME    STRING,
+    ERROR_CATEGORY      STRING,
+    RAW_ROW_CONTENT     STRING
+);
+```
+Identify and Redirect Malformed Rows
+Malformed rows are detected before loading into STAGE.
+Rows failing structural validation are inserted into the Quarantine table:
+```sql
+WITH bad_rows AS (
+    SELECT
+        METADATA$FILENAME AS SOURCE_FILE_NAME,
+        'STRUCTURAL_ERROR' AS ERROR_CATEGORY,
+        TO_VARIANT(OBJECT_CONSTRUCT(*)) AS RAW_ROW_CONTENT
+    FROM RAW_MEDICAID.PUBLIC.MEDICAID_PROVIDER_SPENDING_RAW
+    WHERE TRY_TO_NUMBER(BILLING_PROVIDER_NPI_NUM) IS NULL
+       OR TRY_TO_NUMBER(SERVICING_PROVIDER_NPI_NUM) IS NULL
+       OR TRY_TO_DATE(CLAIM_FROM_MONTH || '-01') IS NULL
+       OR HCPCS_CODE IS NULL
+       OR LENGTH(TRIM(HCPCS_CODE)) = 0
+)
+
+INSERT INTO STAGE_MEDICAID.QUARANTINE.MEDICAID_PROVIDER_SPENDING_BAD_ROWS
+SELECT CURRENT_TIMESTAMP, SOURCE_FILE_NAME, ERROR_CATEGORY, RAW_ROW_CONTENT
+FROM bad_rows;
+```
+Create CLEAN Stage Table
+Only valid rows are loaded into the CLEAN stage table:
 ```sql
 CREATE OR REPLACE TABLE STAGE_MEDICAID.CLEAN.MEDICAID_PROVIDER_SPENDING_STAGE AS
 SELECT
-    TRY_TO_NUMBER(TOTAL_PAID) AS TOTAL_PAID,
-    TRY_TO_NUMBER(TOTAL_PATIENTS) AS TOTAL_PATIENTS,
-    ...
-FROM RAW_MEDICAID.PUBLIC.MEDICAID_PROVIDER_SPENDING_RAW;
+    LPAD(TRIM(BILLING_PROVIDER_NPI_NUM), 10, '0')   AS BILLING_PROVIDER_NPI,
+    LPAD(TRIM(SERVICING_PROVIDER_NPI_NUM), 10, '0') AS SERVICING_PROVIDER_NPI,
+    UPPER(TRIM(HCPCS_CODE))                         AS HCPCS_CODE,
+    TRY_TO_DATE(CLAIM_FROM_MONTH || '-01')          AS CLAIM_MONTH,
+    TRY_TO_NUMBER(TOTAL_PATIENTS)                   AS TOTAL_PATIENTS,
+    TRY_TO_NUMBER(TOTAL_CLAIM_LINES)                AS TOTAL_CLAIM_LINES,
+    TRY_TO_NUMBER(TOTAL_PAID)                       AS TOTAL_PAID
+FROM RAW_MEDICAID.PUBLIC.MEDICAID_PROVIDER_SPENDING_RAW
+WHERE TRY_TO_NUMBER(BILLING_PROVIDER_NPI_NUM) IS NOT NULL
+  AND TRY_TO_NUMBER(SERVICING_PROVIDER_NPI_NUM) IS NOT NULL
+  AND TRY_TO_DATE(CLAIM_FROM_MONTH || '-01') IS NOT NULL
+  AND HCPCS_CODE IS NOT NULL
+  AND LENGTH(TRIM(HCPCS_CODE)) > 0;
 ```
+
+
+
 ## 🟦 9. Create DATE_DIM and SERVICE_CATEGORY_DIM for Power BI modeling
 SQL file: sql/model/date_and_service_dimensions.sql
 
@@ -142,11 +194,13 @@ Purpose:
 To enrich the MODEL layer and the Power BI modeling. It creates DATE_DIM table and SERVICE_CATEGORY_DIM table that will be joined to the FACT Table  
 These dimensions are generated programmatically and do not originate from any source dataset.
 
-`DATE_DIM` - Grain: 1 row per calendar date
-
+# DATE_DIM
+Grain: 1 row per calendar date
 Join: `FACT_MEDICAID_PROVIDER_SPENDING.CLAIM_MONTH` → `DATE_DIM.DATE`
 
-`SERVICE_CATEGORY_DIM` - A reference dimension defining Medicaid service categories based on HCPCS patterns.
+# SERVICE_CATEGORY_DIM
+A reference dimension defining Medicaid service categories based on HCPCS patterns.
+
 
 ## 🟦 10. FACT Table
 SQL file: sql/medicaid_fact_table.sql
@@ -237,10 +291,4 @@ Excerpt:
 - CSV not visible → wrong stage/schema
 - Extraction fails → Snowflake /tmp limit → extract locally
 
-
----
-
-© 2026 Mairilyn Yera Galindo  
-Data-Strata Analytics Portfolio  
-Healthcare Data Analytics | Snowflake | SQL Server | Power BI
 
