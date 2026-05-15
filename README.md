@@ -284,29 +284,57 @@ FACT must be refreshed to avoid stale attributes.
 | ``FACT_MEDICAID_PROVIDER_SPENDING``| (CLAIM_MONTH, BILLING_PROVIDER_NPI)               | Time + provider pruning        |
 ```
 
-## 🧠 BI Semantic Model (In Progress)
-Relationships
-> FACT → NPI_DIM (billing + servicing)
-> FACT → HCPCS_DIM
-> FACT → DATE_DIM
-> FACT → SERVICE_CATEGORY_DIM
-> FACT → LEGACY_SERVICING_PROVIDER_DIM (NEW)
-> DATE_DIM → DQ Trend + Anomalies
+## 🧠 BI Semantic Model
+FACT_MEDICAID_PROVIDER_SPENDING
+    → PROVIDER_DIM (Billing Provider NPI)
+    → PROVIDER_DIM (Servicing Provider NPI)
+    → HCPCS_DIM
+    → DATE_DIM
+    → SERVICE_CATEGORY_DIM
 
-Measures
-+ Total Paid
-+ Total Claims
-+ Avg Paid per Claim
-+ Invalid NPI Rate
-+ Provider Integrity Score
+DQ_INVALID_NPI_TREND
+    → DATE_DIM
 
-Dashboard Pages
-- Medicaid Spending Overview
-- Provider Integrity Scorecard
-- Legacy Servicing Provider Registry
-- DQ Trend & Anomalies
-- HCPCS Explorer
-- Provider Detail
+DQ_INVALID_NPI_ANOMALIES
+    → DATE_DIM
+
+### Measures
+- Total Paid Amount
+- Total Claims
+- Total Patients
+- Average Paid Amount
+- Invalid NPI Rate
+- Provider Integrity Score
+- OP / RX / OTHER Claims & Paid Amount
+- Paid Amount per Provider
+- Provider Percentile Rank
+- Provider Risk Score
+
+## 📊 Dashboard Pages
+
+The Medicaid Provider Spending dashboard is organized into **six pages**, each aligned with the Snowflake MODEL layer and designed for clarity, analytical depth, and portfolio presentation.
+
+1. **Medicaid Spending Overview**  
+   Executive summary of spend, utilization, and geographic distribution.
+
+2. **Provider Integrity Scorecard**  
+   Provider‑level risk scoring, performance metrics, and billing vs servicing analysis.
+
+3. **HCPCS Explorer**  
+   Procedure‑level utilization and spend using the HCPCS dimension.
+
+4. **Service Category Analytics**  
+   OP / RX / OTHER category insights and trends.
+
+5. **Data Quality & Anomaly Detection**  
+   Invalid NPI trends, anomaly flags, quarantine counts, and pipeline health.
+
+6. **Documentation & Lineage**  
+   Star schema, data sources, DAX conventions, and versioning.
+
+This structure provides a complete narrative:  
+**Overview → Provider Integrity → Clinical Utilization → Category Insights → Data Quality → Documentation.**
+
 
 ## 🛠️ Technologies Used
 
