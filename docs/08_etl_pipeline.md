@@ -189,7 +189,7 @@ SQL file: `sql/medicaid_full_pipeline.sql`
 
 ** 🟦 6. MODEL Layer Semantic Scripts (Power BI Modeling)
 
-These scripts enrich the MODEL layer before FACT_MODEL is built.
+These scripts enrich the MODEL layer before FACT_MODEL is consumed by Power BI.
 
 ✅Execution Flow
 ```
@@ -213,7 +213,7 @@ SQL Files (Execution Order)
 
 ### Prerequisites
 
-- `provider_build_dim()` must be completed (NPI_DIM must exist)
+- `provider_build_dim()` must be completed (PROVIDER_DIM must exist)
 - `date_and_service_dimensions.sql` must be completed (DATE_DIM + SERVICE_CATEGORY_DIM must exist)
 - `fact_build_model()` must be completed before running integrity scripts
 - `legacy_servicing_provider_dim.sql` depends on FACT + SERVICE_CATEGORY_DIM
