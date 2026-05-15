@@ -270,66 +270,86 @@ The FACT table currently assigns only RX, OP, and OTHER.
 ED and IP categories exist in SERVICE_CATEGORY_DIM but are not yet mapped in FACT.
 This is intentional and documented for future enhancement (e.g., POS‑based classification).
 
-### 5.1 Quarantine Rules
+## 📘 5.1 Quarantine Rules
 
-Rows that fail structural validation or contain malformed data are redirected to the
-Quarantine area for investigation and remediation.
+During STAGE processing, rows that fail structural validation are redirected to a dedicated
+Quarantine table for auditability and downstream data quality review.
 
-**Quarantine Target Table**
+### Quarantine Table
+The quarantine table is created and maintained directly inside the STAGE script
+(`medicaid_clean_stage.sql`): 
 `STAGE_MEDICAID.QUARANTINE.MEDICAID_PROVIDER_SPENDING_BAD_ROWS`
 
-**Examples of rows sent to Quarantine**
-- Non‑numeric NPI values  
-- Invalid date formats  
-- Corrupted HCPCS codes  
-- Rows failing column alignment  
-- Rows with unexpected delimiters or broken structure  
+### What Triggers Quarantine
+Rows are quarantined when they fail any of the following checks:
 
-**Purpose**
-- Preserve RAW data integrity  
+- `BILLING_PROVIDER_NPI_NUM` is non‑numeric or null  
+- `SERVICING_PROVIDER_NPI_NUM` is non‑numeric or null  
+- `CLAIM_FROM_MONTH` cannot be converted to a valid date  
+- `HCPCS_CODE` is null or empty  
+- Any row with structural corruption (broken delimiters, missing columns)
+
+### What Gets Stored
+Each quarantined row includes:
+
+- `LOAD_TIMESTAMP`  
+- `SOURCE_FILE_NAME`  
+- `ERROR_CATEGORY`  
+- `RAW_ROW_CONTENT` (full raw row captured as a VARIANT object)
+
+### Purpose
 - Prevent malformed rows from entering STAGE or MODEL  
-- Support auditability and data incident workflows  
+- Preserve full raw content for investigation  
+- Provide traceability for CMS/state audits  
+- Support downstream data quality dashboards  
 
-### 5.2 Data Incident Workflow
+## 📘 5.2 Data Incident Workflow
 
-Rows redirected to the Quarantine area follow a standardized Data Incident Workflow to ensure
-traceability, auditability, and timely remediation.
+The Data Incident Workflow governs how quarantined rows are reviewed, remediated, and
+reprocessed. This workflow ensures transparency, auditability, and consistent handling of
+structural data issues.
 
-#### Workflow Steps
+### 1. Detection
+Malformed rows are identified during STAGE processing using validation rules in
+`medicaid_clean_stage.sql`.  
+These rows are inserted into:
+`STAGE_MEDICAID.QUARANTINE.MEDICAID_PROVIDER_SPENDING_BAD_ROWS`
 
-1. **Detection**
-   - Malformed or structurally invalid rows are identified during STAGE processing.
-   - Rows are redirected to:
-     ```
-     STAGE_MEDICAID.QUARANTINE.MEDICAID_PROVIDER_SPENDING_BAD_ROWS
-     ```
 
-2. **Logging**
-   - Each quarantined row is logged with:
-     - Load timestamp
-     - Source file name
-     - Error category (alignment, delimiter, invalid NPI, invalid date, corrupted HCPCS)
+### 2. Logging
+Each quarantined row is logged with:
 
-3. **Review**
-   - Data engineering reviews quarantined rows daily or per pipeline run.
-   - Rows are classified as:
-     - *Correctable* (fixable via transformation)
-     - *Source error* (requires upstream correction)
-     - *Irrecoverable* (permanently excluded)
+- Timestamp of detection  
+- Source file name  
+- Error category (e.g., STRUCTURAL_ERROR)  
+- Full raw row content  
 
-4. **Remediation**
-   - Correctable rows are repaired and re‑inserted into STAGE.
-   - Source errors are escalated to data providers.
-   - Irrecoverable rows remain quarantined for audit.
+This enables reproducibility and auditability.
 
-5. **Reprocessing**
-   - After remediation, the STAGE → MODEL → FACT pipeline is re‑executed for affected dates.
+### 3. Review
+Data engineering reviews quarantined rows as part of the pipeline monitoring process.
+Rows are classified as:
 
-#### Purpose
-- Maintain RAW data integrity  
-- Prevent malformed rows from contaminating MODEL and FACT layers  
-- Provide full audit trail for CMS, state agencies, and internal governance  
-- Support data quality dashboards and anomaly detection  
+- **Correctable** — can be fixed via transformation  
+- **Source Error** — requires upstream correction  
+- **Irrecoverable** — permanently excluded  
+
+### 4. Remediation
+- Correctable rows are repaired and re‑loaded into STAGE.  
+- Source errors are escalated to the data provider.  
+- Irrecoverable rows remain in Quarantine for audit retention.
+
+### 5. Reprocessing
+After remediation, the pipeline is re‑executed for the affected date range:
+
+- STAGE → MODEL → FACT  
+- Monthly FACTs are regenerated as needed  
+- Power BI refreshes reflect corrected data
+
+### Purpose
+- Maintain data integrity across all layers  
+- Provide a clear audit trail for Medicaid/EDS governance  
+- Support anomaly detection and data quality reporting  
 
 ---
 
