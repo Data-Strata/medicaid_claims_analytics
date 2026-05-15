@@ -1,6 +1,6 @@
 -- ============================================================
 -- PROVIDER CLEAN TABLE (STAGE LAYER)
--- Extracts key 19 fields from 330-column NPI_RAW
+-- Extracts key 22 fields from 330-column NPI_RAW
 -- Standardizes names, taxonomy, and dates
 -- ============================================================
 
