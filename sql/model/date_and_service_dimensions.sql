@@ -12,40 +12,64 @@ USE SCHEMA MODEL;
 -- 1. DATE_DIM
 -- ============================================================
 
-CREATE OR REPLACE TABLE DATE_DIM AS
-WITH dates AS (
-    SELECT 
-        DATEADD(day, seq4(), '2018-01-01') AS full_date
-    FROM TABLE(GENERATOR(ROWCOUNT => 3650))  -- 10 years of dates
+CREATE OR REPLACE TABLE ANALYTICS_MEDICAID.MODEL.DATE_DIM AS
+WITH RECURSIVE dates AS (
+    SELECT DATE('2018-01-01') AS dt
+    UNION ALL
+    SELECT DATEADD(day, 1, dt)
+    FROM dates
+    WHERE dt < DATE('2027-12-31')
 )
 SELECT
-    full_date AS DATE_KEY,
-    YEAR(full_date) AS YEAR,
-    MONTH(full_date) AS MONTH,
-    DAY(full_date) AS DAY,
-    TO_VARCHAR(full_date, 'YYYY-MM') AS YEAR_MONTH,
-    QUARTER(full_date) AS QUARTER,
-    DAYOFWEEK(full_date) AS DAY_OF_WEEK,
-    WEEKOFYEAR(full_date) AS WEEK_OF_YEAR,
-    CASE WHEN DAYOFWEEK(full_date) IN (6,7) THEN 'Weekend' ELSE 'Weekday' END AS WEEKDAY_FLAG
+    /* -------------------------
+       Core Date Fields
+    ------------------------- */
+    dt AS DATE_KEY,                         -- Must be DATE (not TIMESTAMP)
+    YEAR(dt) AS YEAR,
+    MONTH(dt) AS MONTH,
+    DAY(dt) AS DAY,
+
+    /* -------------------------
+       Year-Month (sortable)
+    ------------------------- */
+    TO_VARCHAR(dt, 'YYYYMM') AS YEAR_MONTH, -- Used for axis labels
+
+    /* -------------------------
+       Calendar Attributes
+    ------------------------- */
+    DAYOFWEEK(dt) AS DAY_OF_WEEK,
+    WEEKOFYEAR(dt) AS WEEK_OF_YEAR,
+    QUARTER(dt) AS QUARTER,
+
+    /* -------------------------
+       Additional Useful Fields
+    ------------------------- */
+    TO_VARCHAR(dt, 'YYYY-MM-DD') AS DATE_TEXT,
+    TO_VARCHAR(dt, 'Mon YYYY') AS MONTH_NAME_YEAR,
+    TO_VARCHAR(dt, 'YYYY') || '-' || LPAD(MONTH(dt), 2, '0') AS YEAR_MONTH_TEXT
+
 FROM dates
-ORDER BY full_date;
+ORDER BY dt;
+
 
 -- ============================================================
 -- 2. SERVICE_CATEGORY_DIM
 -- ============================================================
 
-CREATE OR REPLACE TABLE SERVICE_CATEGORY_DIM AS
-SELECT 
-    CATEGORY_KEY,
-    SERVICE_CATEGORY,
-    DESCRIPTION
-FROM VALUES
-    (1, 'ED', 'Emergency Department'),
-    (2, 'IP', 'Inpatient'),
-    (3, 'OP', 'Outpatient'),
-    (4, 'RX', 'Pharmacy')
-    AS t(CATEGORY_KEY, SERVICE_CATEGORY, DESCRIPTION);
+CREATE OR REPLACE TABLE SERVICE_CATEGORY_DIM (
+    CATEGORY_KEY      INTEGER,
+    SERVICE_CATEGORY  VARCHAR(10),
+    DESCRIPTION       VARCHAR(50)
+);
+
+INSERT INTO SERVICE_CATEGORY_DIM (CATEGORY_KEY, SERVICE_CATEGORY, DESCRIPTION)
+VALUES
+    (1, 'ED',    'Emergency Department'),
+    (2, 'IP',    'Inpatient'),
+    (3, 'OP',    'Outpatient'),
+    (4, 'RX',    'Pharmacy'),
+    (5, 'OTHER', 'Uncategorized');
+
 
 -- ============================================================
 -- End of File
