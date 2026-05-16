@@ -581,7 +581,7 @@ Purpose: monitor provider data quality, NPI validity, and anomaly detection.
 ---
 
 ### 🟪 6. BI Semantic Layer (Power BI)
-19. Power BI Model Refresh  
+> Power BI Model Refresh  
     - Star schema relationships  
     - DAX measures  
     - Time intelligence  
@@ -651,194 +651,223 @@ Purpose: deliver analytics to end users.
 
 ---
 
-## 10. This section defines the complete Source‑to‑Target (S2T) mapping for the Medicaid Provider Spending pipeline, including:
+## 📘 10. FACT_MEDICAID_PROVIDER_SPENDING  
+**Layer:** MODEL (Analytics Layer)  
+**SQL File:** `sql/fact/medicaid_fact_table.sql`  
+**Grain:**  
+`CLAIM_MONTH + BILLING_PROVIDER_NPI + SERVICING_PROVIDER_NPI + HCPCS_CODE + SERVICE_CATEGORY`
 
-- Source → FACT_MEDICAID_PROVIDER_SPENDING
-- FACT_MEDICAID_PROVIDER_SPENDING → FACT_PROVIDER_MONTHLY
-- FACT_MEDICAID_PROVIDER_SPENDING → FACT_HCPCS_MONTHLY
-- Data types, nullability, alignment rules
-- Ingestion validation rules
-- Column‑shift detection logic
-- Error handling and quarantine rules
-
-For details on the 2018 data quality incident and remediation steps, see:
-`16_Data_quality_incident.md`
-
-### 10.1. Source → FACT_MEDICAID_PROVIDER_SPENDING
-> 10.1.1 Source Schema (Raw Medicaid Provider Spending File)
-| Column | Type | Notes |
-| --- | --- | --- |
-| BILLING_PROVIDER_NPI | STRING | Must be 10 digits |
-| BILLING_PROVIDER_STATE | STRING | 2‑letter state |
-| SERVICING_PROVIDER_NPI | STRING | Must be 10 digits |
-| SERVICING_PROVIDER_STATE | STRING | 2‑letter state |
-| HCPCS_CODE | STRING | Must match HCPCS master |
-| HCPCS_DESCRIPTION | STRING | From HCPCS master |
-| HCPCS_SHORT_DESCRIPTION | STRING | From HCPCS master |
-| HCPCS_STATUS | STRING | From HCPCS master |
-| SERVICE_CATEGORY | STRING | Derived |
-| CLAIM_MONTH | DATE | YYYY‑MM‑01 |
-| TOTAL_CLAIM_LINES | NUMBER | Raw count |
-| TOTAL_PAID | NUMBER | Raw paid amount |
-| TOTAL_PATIENTS | NUMBER | Raw count |
-
-> 10.1.2 Target Schema (FACT_MEDICAID_PROVIDER_SPENDING)
-Same as source, with enforced constraints:
-- NPIs must be 10‑digit numeric strings
-- HCPCS_CODE cannot be NULL
-- TOTAL_PAID must be numeric and < $100M
-- CLAIM_MONTH must be a valid month boundary
-
-> 10.1.3 Mapping Table
-| Source Column | Target Column | Transform | Notes |
-| --- | --- | --- | --- |
-| BILLING_PROVIDER_NPI | BILLING_PROVIDER_NPI | Direct | Validate 10 digits |
-| BILLING_PROVIDER_STATE | BILLING_PROVIDER_STATE | Direct | Uppercase |
-| SERVICING_PROVIDER_NPI | SERVICING_PROVIDER_NPI | Direct | Validate 10 digits |
-| SERVICING_PROVIDER_STATE | SERVICING_PROVIDER_STATE | Direct | Uppercase |
-| HCPCS_CODE | HCPCS_CODE | Direct | Validate against HCPCS master |
-| HCPCS_DESCRIPTION | HCPCS_DESCRIPTION | Direct | From HCPCS master |
-| HCPCS_SHORT_DESCRIPTION | HCPCS_SHORT_DESCRIPTION | Direct | From HCPCS master |
-| HCPCS_STATUS | HCPCS_STATUS | Direct | From HCPCS master |
-| SERVICE_CATEGORY | SERVICE_CATEGORY | Direct | Derived |
-| CLAIM_MONTH | CLAIM_MONTH | Cast to DATE | Must be YYYY‑MM‑01 |
-| TOTAL_CLAIM_LINES | TOTAL_CLAIM_LINES | SUM | Aggregated in monthly tables |
-| TOTAL_PAID | TOTAL_PAID | SUM | Must be < $100M |
-| TOTAL_PATIENTS | TOTAL_PATIENTS | SUM | Aggregated in monthly tables |
-
-> 10.1.4 FACT Grain Definition
-The FACT_MEDICAID_PROVIDER_SPENDING table is stored at the following grain:
-
-**One row per:**
-- CLAIM_MONTH  
-- BILLING_PROVIDER_NPI  
-- SERVICING_PROVIDER_NPI  
-- HCPCS_CODE  
-- SERVICE_CATEGORY  
-
-This grain ensures:
-- Accurate aggregation of claim lines, paid amounts, and patient counts  
-- Correct alignment with SERVICE_CATEGORY_DIM  
-- Consistent behavior in Power BI slicers and filters  
-- Proper grouping for FACT_PROVIDER_MONTHLY and FACT_HCPCS_MONTHLY  
-
-### 📘 10.2 Monthly FACT Lineage — Aggregations from FACT_MEDICAID_PROVIDER_SPENDING
-
-The monthly FACT tables are **derived aggregations** of `FACT_MEDICAID_PROVIDER_SPENDING`.  
-They do **not** source directly from RAW or STAGE tables.
-
-This preserves a single source of truth for claim‑level logic and ensures consistent
-business rules across all downstream aggregates.
+This FACT table represents Medicaid provider spending at the claim‑month + provider + HCPCS level.
+It is the central fact table used by Power BI and downstream analytics.
 
 ---
 
-> 10.2.1 FACT_PROVIDER_MONTHLY
+## 10.1 Source Tables
 
-**Purpose**  
-Summarize Medicaid spending at the **provider × month × service category** level for trend and performance analysis.
+| Layer | Table | Purpose |
+|-------|--------|----------|
+| STAGE | `MEDICAID_PROVIDER_SPENDING_STAGE` | Cleaned Medicaid spending data |
+| MODEL | `PROVIDER_DIM` | Clean, deduped provider dimension (billing + servicing) |
+| MODEL | `HCPCS_DIM` | Procedure code dimension |
+| MODEL | `DATE_DIM` | Calendar dimension |
+| MODEL | `SERVICE_CATEGORY_DIM` | Service category dimension |
 
-**Grain**  
-One row per:
+---
 
-- `CLAIM_MONTH`
-- `BILLING_PROVIDER_NPI`
-- `SERVICE_CATEGORY`
+## 10.2 Field Mapping (RAW → STAGE → FACT)
 
-**Source Lineage**
+| FACT Field | Source | Transformation |
+|------------|--------|----------------|
+| BILLING_PROVIDER_NPI | STAGE | LPAD + TRIM applied in STAGE |
+| SERVICING_PROVIDER_NPI | STAGE | LPAD + TRIM applied in STAGE |
+| HCPCS_CODE | STAGE | UPPER + TRIM applied in STAGE |
+| CLAIM_MONTH | STAGE | `TRY_TO_DATE(CLAIM_FROM_MONTH || '-01')` |
+| TOTAL_PATIENTS | STAGE | `TRY_TO_NUMBER` |
+| TOTAL_CLAIM_LINES | STAGE | `TRY_TO_NUMBER` |
+| TOTAL_PAID | STAGE | `TRY_TO_NUMBER` |
+| SERVICE_CATEGORY | FACT | Derived using HCPCS patterns |
+| BILLING_PROVIDER_STATE | PROVIDER_DIM | Lookup via NPI |
+| BILLING_PROVIDER_TYPE | PROVIDER_DIM | Lookup via NPI |
+| BILLING_PROVIDER_NAME | PROVIDER_DIM | `PROVIDER_DISPLAY_NAME` |
+| SERVICING_PROVIDER_STATE | PROVIDER_DIM | Lookup via NPI |
+| SERVICING_PROVIDER_TYPE | PROVIDER_DIM | Lookup via NPI |
+| SERVICING_PROVIDER_NAME | PROVIDER_DIM | `PROVIDER_DISPLAY_NAME` |
+| HCPCS_DESCRIPTION | HCPCS_DIM | Lookup |
+| HCPCS_SHORT_DESCRIPTION | HCPCS_DIM | Lookup |
+| HCPCS_STATUS | HCPCS_DIM | Lookup |
 
-- **Source FACT:** `FACT_MEDICAID_PROVIDER_SPENDING`
+---
 
-**Core Aggregation Logic (Model Layer)**
+## 10.3 Service Category Logic (HCPCS‑Based)
 
 ```sql
-CREATE OR REPLACE TABLE FACT_PROVIDER_MONTHLY AS
-SELECT
-    CLAIM_MONTH,
-    BILLING_PROVIDER_NPI,
-    SERVICE_CATEGORY,
-    SUM(TOTAL_PAID_AMOUNT)      AS TOTAL_PAID_AMOUNT,
-    SUM(CLAIM_COUNT)            AS CLAIM_COUNT,
-    COUNT(DISTINCT MEMBER_ID)   AS UNIQUE_MEMBER_COUNT
-FROM FACT_MEDICAID_PROVIDER_SPENDING
-GROUP BY
-    CLAIM_MONTH,
-    BILLING_PROVIDER_NPI,
-    SERVICE_CATEGORY;
+CASE
+    WHEN HCPCS_CODE LIKE 'J%' THEN 'RX'
+    WHEN HCPCS_CODE LIKE 'A0%' THEN 'OP'
+    WHEN HCPCS_CODE LIKE 'G0%' THEN 'OP'
+    WHEN HCPCS_CODE LIKE 'H0%' THEN 'OP'
+    WHEN HCPCS_CODE LIKE 'T%' THEN 'OP'
+    ELSE 'OTHER'
+END
 ```
+Notes:
+- ED/IP categories are reserved for future expansion.
+- Current dataset does not contain ED/IP HCPCS patterns.
+- S2T documents this intentional mismatch.
 
-> 10.2.2 FACT_HCPCS_MONTHLY
-Purpose  
-Summarize Medicaid spending at the HCPCS × month × service category level for utilization and fee schedule analysis.
+10.4 Dimension Joins (Updated to PROVIDER_DIM)
+| Dimension                | Join Key                     | Notes |
+| ------------------------ | ---------------------------- | ------------------------- |
+| PROVIDER_DIM (Billing)   | BILLING_PROVIDER_NPI → NPI   | Clean provider attributes |
+| PROVIDER_DIM (Servicing) | SERVICING_PROVIDER_NPI → NPI | Clean provider attributes |
+| HCPCS_DIM                | HCPCS_CODE                   | Procedure metadata |
+| DATE_DIM                 | CLAIM_MONTH → DATE_KEY       | Calendar attributes |
+| SERVICE_CATEGORY_DIM     | SERVICE_CATEGORY             | Category metadata |
 
-Grain  
-One row per:
-- CLAIM_MONTH
-- HCPCS_CODE
-- SERVICE_CATEGORY
-
-Source Lineage
-- Source FACT: FACT_MEDICAID_PROVIDER_SPENDING
-
-Core Aggregation Logic (Model Layer)
+10.5 SQL Implementation (Excerpt)
 ```sql
-CREATE OR REPLACE TABLE FACT_HCPCS_MONTHLY AS
+CREATE OR REPLACE TABLE FACT_MEDICAID_PROVIDER_SPENDING AS
 SELECT
-    CLAIM_MONTH,
-    HCPCS_CODE,
-    SERVICE_CATEGORY,
-    SUM(TOTAL_PAID_AMOUNT)      AS TOTAL_PAID_AMOUNT,
-    SUM(CLAIM_COUNT)            AS CLAIM_COUNT,
-    COUNT(DISTINCT MEMBER_ID)   AS UNIQUE_MEMBER_COUNT
+    s.BILLING_PROVIDER_NPI,
+    s.SERVICING_PROVIDER_NPI,
+    s.HCPCS_CODE,
+    s.CLAIM_MONTH,
+    s.TOTAL_PATIENTS,
+    s.TOTAL_CLAIM_LINES,
+    s.TOTAL_PAID,
+
+    CASE
+        WHEN s.HCPCS_CODE LIKE 'J%' THEN 'RX'
+        WHEN s.HCPCS_CODE LIKE 'A0%' THEN 'OP'
+        WHEN s.HCPCS_CODE LIKE 'G0%' THEN 'OP'
+        WHEN s.HCPCS_CODE LIKE 'H0%' THEN 'OP'
+        WHEN s.HCPCS_CODE LIKE 'T%' THEN 'OP'
+        ELSE 'OTHER'
+    END AS SERVICE_CATEGORY,
+
+    p1.PROVIDER_STATE_US       AS BILLING_PROVIDER_STATE,
+    p1.PROVIDER_TYPE           AS BILLING_PROVIDER_TYPE,
+    p1.PROVIDER_DISPLAY_NAME   AS BILLING_PROVIDER_NAME,
+
+    p2.PROVIDER_STATE_US       AS SERVICING_PROVIDER_STATE,
+    p2.PROVIDER_TYPE           AS SERVICING_PROVIDER_TYPE,
+    p2.PROVIDER_DISPLAY_NAME   AS SERVICING_PROVIDER_NAME,
+
+    h.DESCRIPTION         AS HCPCS_DESCRIPTION,
+    h.SHORT_DESCRIPTION   AS HCPCS_SHORT_DESCRIPTION,
+    h.STATUS              AS HCPCS_STATUS
+
+FROM STAGE_MEDICAID.CLEAN.MEDICAID_PROVIDER_SPENDING_STAGE s
+LEFT JOIN ANALYTICS_MEDICAID.MODEL.PROVIDER_DIM p1
+    ON s.BILLING_PROVIDER_NPI = p1.NPI
+LEFT JOIN ANALYTICS_MEDICAID.MODEL.PROVIDER_DIM p2
+    ON s.SERVICING_PROVIDER_NPI = p2.NPI
+LEFT JOIN ANALYTICS_MEDICAID.MODEL.HCPCS_DIM h
+    ON s.HCPCS_CODE = h.HCPCS_CODE;
+
+```
+10.6 Validation
+```sql
+SELECT COUNT(*) AS FACT_ROW_COUNT
+FROM FACT_MEDICAID_PROVIDER_SPENDING;
+
+SELECT SERVICE_CATEGORY, COUNT(*)
 FROM FACT_MEDICAID_PROVIDER_SPENDING
-GROUP BY
-    CLAIM_MONTH,
-    HCPCS_CODE,
-    SERVICE_CATEGORY;
+GROUP BY SERVICE_CATEGORY
+ORDER BY COUNT(*) DESC;
+
+
 ```
 
-> 10.2.3 Lineage Summary
-- FACT_MEDICAID_PROVIDER_SPENDING  
-↳ feeds FACT_PROVIDER_MONTHLY (provider‑level monthly aggregates)
-↳ feeds FACT_HCPCS_MONTHLY (HCPCS‑level monthly aggregates)
+10.7 Clustering
+```sql
+ALTER TABLE ANALYTICS_MEDICAID.MODEL.FACT_MEDICAID_PROVIDER_SPENDING
+  CLUSTER BY (CLAIM_MONTH, BILLING_PROVIDER_NPI);
 
-No monthly FACT table reads directly from RAW or STAGE.
-All monthly metrics inherit the same business rules, filters, and joins as the base FACT.
+```
+
+10.8 Foreign Keys (Documentation Only)
+```sql
+-- Billing provider → PROVIDER_DIM
+FOREIGN KEY (BILLING_PROVIDER_NPI)
+  REFERENCES PROVIDER_DIM (NPI);
+
+-- Servicing provider → PROVIDER_DIM
+FOREIGN KEY (SERVICING_PROVIDER_NPI)
+  REFERENCES PROVIDER_DIM (NPI);
+
+-- HCPCS → HCPCS_DIM
+FOREIGN KEY (HCPCS_CODE)
+  REFERENCES HCPCS_DIM (HCPCS_CODE);
+```
+
+10.9 Notes & Decisions
+- PROVIDER_DIM replaces NPI_DIM as the authoritative provider dimension.
+- Monthly FACT tables removed (Power BI performs monthly aggregations).
+- FACT grain updated to reflect actual implementation.
+- Service category logic documented and aligned with S2T.
+- FACT table is the single source of truth for Medicaid provider spending analytics.
 
 ---
 
 ## 📊 11. Power BI Semantic Model Usage
 
-### Star Schema in Power BI
+### Star Schema in Power BI (Updated)
 
-The MODEL layer tables are consumed directly by Power BI as a star schema:
+The MODEL layer tables are consumed directly by Power BI as a clean, simplified star schema.
 
-- **Fact Tables**  
-  - `FACT_MEDICAID_PROVIDER_SPENDING` (DirectQuery)  
-  - `FACT_PROVIDER_MONTHLY`  
-  - `FACT_HCPCS_MONTHLY`
+### **Fact Table**
+- `FACT_MEDICAID_PROVIDER_SPENDING`  
+  - Contains all claim‑month × provider × HCPCS detail  
+  - Used for all aggregations (daily, monthly, yearly)  
+  - Monthly tables are no longer required
 
-- **Dimensions**  
-  - `NPI_DIM`  
-  - `HCPCS_DIM`  
-  - `DATE_DIM`  
-  - `SERVICE_CATEGORY_DIM`
+### **Dimensions**
+- `PROVIDER_DIM`  
+  - Clean, deduped, standardized provider dimension  
+  - Replaces `NPI_DIM` entirely  
+  - Used for both billing and servicing provider relationships
 
-### Key Fields for Power BI Visuals
+- `HCPCS_DIM`  
+  - Procedure metadata (description, status, short description)
+
+- `DATE_DIM`  
+  - Calendar attributes for time intelligence
+
+- `SERVICE_CATEGORY_DIM`  
+  - OP / RX / OTHER classification metadata
+
+- `STATE_REF`
+  - Lookup table used by clean_provider_states.sql to standardize provider geography.  
+
+### **Relationship Configuration**
+- **One‑to‑Many** from each dimension → FACT  
+- **Cross‑filter direction:** Single  
+- **Cardinality:** Enforced logically (documented in S2T)  
+- **Dual provider relationships:**  
+  - BILLING_PROVIDER_NPI → PROVIDER_DIM.NPI  
+  - SERVICING_PROVIDER_NPI → PROVIDER_DIM.NPI  
+
+
+### **Key Fields for Power BI Visuals**
 
 | Visual Type | Field Used | Source Table |
-|-------------|-----------|--------------|
-| Filled Map | `PROVIDER_STATE_US` | `NPI_DIM` |
-| Tree Map (Geographic) | `PROVIDER_STATE_US` | `NPI_DIM` |
-| Time Series | `YEAR_MONTH` | `DATE_DIM` |
-| Service Category Slicer | `SERVICE_CATEGORY` | `SERVICE_CATEGORY_DIM` or `FACT` |
-| Provider Drilldown | `FULL_NAME`, `ORG_NAME` | `NPI_DIM` |
+|-------------|------------|--------------|
+| Filled Map | `PROVIDER_STATE_US` | `PROVIDER_DIM` |
+| Tree Map (Geographic) | `PROVIDER_STATE_US` | `PROVIDER_DIM` |
+| Provider Drilldown | `PROVIDER_DISPLAY_NAME`, `ORG_NAME` | `PROVIDER_DIM` |
 | Procedure Analysis | `HCPCS_DESCRIPTION` | `HCPCS_DIM` |
+| Time Series | `YEAR_MONTH` | `DATE_DIM` |
+| Service Category Slicer | `SERVICE_CATEGORY` | `SERVICE_CATEGORY_DIM` |
 
-### Relationship Configuration
+### **Monthly Aggregations**
+Power BI performs all monthly aggregations dynamically using DAX:
 
-- **One‑to‑Many** relationships from all dimensions to FACT tables  
-- **Cross‑filter direction:** Single  
-- **Cardinality:** Enforced logically (documented in S2T)
+- Total Paid by Month  
+- Total Claims by Month  
+- Unique Patients by Month  
+- Provider performance trends  
+- HCPCS utilization trends  
 
 ### DAX Measures
 DAX measures are defined in the Power BI semantic layer and documented in:
@@ -903,6 +932,7 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
                                           | added Power BI usage guidance |
 | **2.1** | 2026-05-07 | Mairilyn Yera    | Corrected Full_Name construction, added Provider_Display_Name, Provider_Type and Data_Quality_Flag
 | **2.2** | 2026-05-10 | Mairilyn Yera    | Added section 10 on mapping for the Medicaid Provider Spending pipeline and updated section 11 to include 2 new Fact tables
+| **2.3** | 2026-05-15 | Mairilyn Yera    | Updated Model Layer, added Integrity Layer, introduced Provider_DIM as a cleaned streamline NPI dimesion table and Drop Fact tables
 
 
 **Note**: All changes follow semantic versioning and include brief descriptions of modifications.
