@@ -3,14 +3,14 @@
 The MODEL layer transforms CLEAN tables into analytics‑ready dimensional structures used by FACT tables and Power BI.  
 This layer follows a dimensional modeling approach (Kimball‑style) and includes:
 
-- Provider Dimension (`NPI_DIM`)
+- Provider Dimension (`PROVIDER_DIM`)
 - HCPCS Dimension (`HCPCS_DIM`)
 - Date Dimension (`DATE_DIM`)
 - Service Category Dimension (`SERVICE_CATEGORY_DIM`)
 - Medicaid Spending Fact Table (`FACT_PROVIDER_SPENDING`)
 - Geographic Standardization (PRACTICE_STATE_US, MAILING_STATE_US, PROVIDER_STATE_US)
 
-All MODEL objects are built in a strict dependency order to ensure correct joins and complete enrichment.
+All MODEL objects are built in a strict dependency order to ensure correct joins, complete enrichment, and BI‑ready semantics.
 
 ---
 
@@ -24,69 +24,182 @@ The MODEL layer provides:
 - Deduplicated, analytics‑ready dimensions  
 - Standardized geographic fields  
 - Calendar and service category dimensions  
-- A fully enriched fact table ready for BI consumption  
+- A fully enriched fact table ready for BI consumption
+- Provider integrity monitoring tables
+- Legacy servicing provider classification
+
+This layer is read‑only relative to RAW/STAGE and optimized for BI consumption.  
 
 ---
 
-## 🟦 2. MODEL Execution Order (Summary)
+## 🟦 2. MODEL Layer Inventory
+
+🟦 2.1. Core Dimensions
+> PROVIDER_DIM
+Rows: ~9.5M
+Size: ~427MB
+Purpose:  
+The authoritative provider dimension used for both billing and servicing providers.
+Replaces the deprecated NPI_DIM.
+
+Contains:
+- NPI
+- Provider Type (Individual / Organization)
+- Full Name / Org Name
+- Unified Provider Display Name
+- PRACTICE_STATE_US / MAILING_STATE_US / PROVIDER_STATE_US
+- Taxonomy
+- Enumeration dates
+- Data quality flags
+
+> HCPCS_DIM
+Rows: ~9.1K
+Purpose:  
+Procedure metadata used for clinical and utilization analytics.
+
+> DATE_DIM
+Rows: ~3.7K
+Purpose:  
+Calendar dimension used for all time intelligence.
+
+> SERVICE_CATEGORY_DIM
+Rows: 5
+Purpose:  
+Maps HCPCS patterns into OP / RX / OTHER categories.
+
+> STATE_REF
+Rows: 59
+Purpose:  
+Lookup table used by clean_provider_states.sql to standardize provider geography.
+
+🟦 2.2 Fact Table
+> FACT_MEDICAID_PROVIDER_SPENDING
+Rows: ~238M
+Size: ~3.2GB
+Purpose:  
+Primary analytics fact table.
+
+🟦 2.3 Provider Integrity Tables
+> UNKNOWN_PROVIDER_DIM
+Rows: ~2.6K
+Purpose:  
+Captures malformed or non‑enumerated provider identifiers.
+Used for integrity scoring and DQ dashboards.
+
+> LEGACY_SERVICING_PROVIDER_DIM
+(Not shown in screenshot but part of MODEL)  
+Purpose:  
+Classifies non‑NPI servicing IDs (A‑prefix, M‑prefix, alphanumeric).
+
+🟦 2.4 Data Quality Monitoring Tables
+> DQ_INVALID_NPI_TREND
+Purpose:  
+Monthly invalid NPI counts.
+
+> DQ_INVALID_NPI_ANOMALIES
+Purpose:  
+3‑sigma anomaly detection for invalid NPI spikes/drops.
+
+---
+
+## 🟦 3. MODEL Execution Order (Summary)
 
 The MODEL layer must be executed in a strict dependency order to ensure data integrity and correct Power BI behavior:
 
-1. **NPI_DIM**  
-2. **Geographic Standardization** (`clean_provider_states.sql`)  
-3. **DATE_DIM + SERVICE_CATEGORY_DIM**  
-4. **FACT_PROVIDER_SPENDING**  
-5. **Integrity Layer**  
-   - `legacy_servicing_provider_dim.sql`  
-   - `dq_invalid_npi_trend.sql`  
-   - `dq_invalid_npi_anomalies.sql`  
-6. **Power BI Semantic Model**
+1. provider_build_dim()  
+→ Builds PROVIDER_DIM (replaces NPI_DIM)
 
-This sequence ensures:
-- All dimensions exist before the fact table  
-- All integrity tables have access to FACT + DATE_DIM  
-- Power BI receives a complete, enriched MODEL layer  
+2. clean_provider_states.sql  
+→ Standardizes PRACTICE_STATE_US, MAILING_STATE_US, PROVIDER_STATE_US
 
-## 🚀 Dependency Diagram — Correct Refresh Order
-Below is a clear, architecture‑accurate dependency diagram showing how the NPI pipelines flow into FACT_MEDICAID.
+3. date_and_service_dimensions.sql  
+→ Builds DATE_DIM + SERVICE_CATEGORY_DIM
+
+4. fact_build_model()  
+→ Builds FACT_MEDICAID_PROVIDER_SPENDING
+
+5. Integrity Layer
+- legacy_servicing_provider_dim.sql
+- dq_invalid_npi_trend.sql
+- dq_invalid_npi_anomalies.sql
+
+6. Power BI Semantic Model  
+→ Consumes FACT + DIMs + DQ tables
+
+This ensures:
+- All dimensions exist before FACT
+- Integrity tables have access to FACT + DATE_DIM
+- Power BI receives a complete, enriched MODEL layer 
+
+## 🚀 ## 🚀 Dependency Diagram — Correct Refresh Order (Updated)
+
+The MODEL layer follows a strict dependency chain to ensure that all dimensions, fact tables, and integrity monitoring tables are built in the correct order. This guarantees referential integrity, complete enrichment, and a BI‑ready semantic model.
+
+The updated dependency flow is:
+
+RAW → CLEAN → MODEL → SEMANTIC MODEL (Power BI)
+
 ```code
-                ┌──────────────────────────┐
-                │   RAW_MEDICAID.NPI_RAW   │
-                └──────────────┬───────────┘
+                ┌────────────────────────────────┐
+                │   RAW_MEDICAID.NPI_RAW         │
+                └──────────────┬─────────────────┘
                                │
                                ▼
-                ┌──────────────────────────┐
-                │   STAGE.CLEAN.NPI_CLEAN  │
-                │  (Name Sanitization +    │
-                │   Display Name + DQ Flag)│
-                └──────────────┬───────────┘
+                ┌────────────────────────────────┐
+                │ STAGE.CLEAN.NPI_CLEAN          │
+                │ (Name Cleaning + DQ Flags)     │
+                └──────────────┬─────────────────┘
                                │
                                ▼
-                ┌──────────────────────────┐
-                │     ANALYTICS.NPI_DIM    │
-                │ (Provider Dimension)     │
-                └──────────────┬───────────┘
+                ┌────────────────────────────────┐
+                │  MODEL.PROVIDER_DIM            │
+                │  (Authoritative Provider DIM)  │
+                └──────────────┬─────────────────┘
                                │
                                ▼
-                ┌──────────────────────────┐
-                │   ANALYTICS.FACT_MEDICAID│
-                │ (Joins to NPI_DIM via    │
-                │  Billing/Servicing NPI)  │
-                └──────────────┬───────────┘
+                ┌────────────────────────────────┐
+                │ MODEL.clean_provider_states    │
+                │ (PRACTICE_STATE_US, etc.)      │
+                └──────────────┬─────────────────┘
                                │
                                ▼
-                ┌──────────────────────────┐
-                │ Power BI Semantic Model  │
-                │  (Provider_Display_Name, │
-                │   Provider_Type, DQ Flag)│
-                └──────────────────────────┘
+                ┌────────────────────────────────┐
+                │ MODEL.DATE_DIM                 │
+                │ MODEL.SERVICE_CATEGORY_DIM     │
+                └──────────────┬─────────────────┘
+                               │
+                               ▼
+                ┌────────────────────────────────┐
+                │ MODEL.FACT_MEDICAID_PROVIDER_  │
+                │          SPENDING              │
+                │ (Joins to PROVIDER_DIM,        │
+                │  HCPCS_DIM, DATE_DIM,          │
+                │  SERVICE_CATEGORY_DIM)         │
+                └──────────────┬─────────────────┘
+                               │
+                               ▼
+        ┌──────────────────────────────┬──────────────────────────────┐
+        │                              │                              │
+        ▼                              ▼                              ▼
+
+┌───────────────────────────┐   ┌───────────────────────────┐   ┌───────────────────────────┐
+│ LEGACY_SERVICING_PROVIDER │   │ DQ_INVALID_NPI_TREND      │   │ DQ_INVALID_NPI_ANOMALIES   │
+│ (Non‑NPI Servicing IDs)   │   │ (Monthly Invalid NPI)      │   │ (3‑Sigma Anomaly Flags)    │
+└──────────────┬────────────┘   └──────────────┬────────────┘   └──────────────┬────────────┘
+               │                               │                               │
+               └───────────────────────────────┴───────────────────────────────┘
+                                               │
+                                               ▼
+                ┌──────────────────────────────────────────────┐
+                │        Power BI Semantic Model               │
+                │  (FACT + DIMs + Integrity Tables)            │
+                └──────────────────────────────────────────────┘
 
 ```
 
 ---
 
-
-## 🟦 3. Star Schema Overview
+## 🟦 4. Star Schema Overview
 ---
 
 ## 📌 Primary & Foreign Key Relationships (Star Schema)
@@ -95,22 +208,32 @@ Although Snowflake does not enforce constraints, the MODEL layer defines them fo
 Primary Keys
 | Table | Primary Key | Description |
 | --- | --- | --- |
-| ``NPI_DIM`` | ``NPI`` | Unique provider identifier |
-| ``HCPCS_DIM`` | ``HCPCS_CODE`` | Unique procedure code |
-| ``FACT_MEDICAID_PROVIDER_SPENDING`` | Composite (implicit) | Grain: one row per provider per claim month |
+| ``PROVIDER_DIM`` | ``NPI`` | Authoritative provider identifier |
+| ``HCPCS_DIM`` | ``HCPCS_CODE`` | Procedure code |
+| ``DATE_DIM`` | ``DATE_KEY`` | Calendar key |
+| ``SERVICE_CATEGORY_DIM`` | ``SERVICE_CATEGORY`` | OP/RX/OTHER |
+
+FACT Grain
+One row per:
+- CLAIM_MONTH
+- BILLING_PROVIDER_NPI
+- SERVICING_PROVIDER_NPI
+- HCPCS_CODE
+- SERVICE_CATEGORY
 
 Foreign Keys
 | Fact Column | References | Purpose |
 | --- | --- | --- |
-| ``BILLING_PROVIDER_NPI`` | ``NPI_DIM(NPI)`` | Provider enrichment |
-| ``RENDERING_PROVIDER_NPI`` | ``NPI_DIM(NPI)`` | Rendering provider details |
-| ``HCPCS_CODE`` | ``HCPCS_DIM(HCPCS_CODE)`` | Procedure metadata |
+| BILLING_PROVIDER_NPI | PROVIDER_DIM(NPI) | Billing provider enrichment |
+| SERVICING_PROVIDER_NPI | PROVIDER_DIM(NPI) | Servicing provider enrichment |
+| HCPCS_CODE | HCPCS_DIM(HCPCS_CODE) | Procedure metadata |
+| CLAIM_MONTH | DATE_DIM(DATE_KEY) | Time intelligence |
+| SERVICE_CATEGORY | SERVICE_CATEGORY_DIM | Category metadata |
 
-This creates a clean, well‑defined star schema optimized for analytics.
 
 ```code
                    ┌───────────────────────────┐
-                   │        DATE_DIM           │
+                   │         DATE_DIM          │
                    │───────────────────────────│
                    │ DATE_KEY (PK)             │
                    │ DATE                      │
@@ -124,16 +247,17 @@ This creates a clean, well‑defined star schema optimized for analytics.
         ▼                                                   ▼
 
 ┌───────────────────────────┐                 ┌───────────────────────────┐
-│         NPI_DIM           │                 │       HCPCS_DIM           │
+│       PROVIDER_DIM        │                 │        HCPCS_DIM          │
 │───────────────────────────│                 │───────────────────────────│
 │ NPI (PK)                  │                 │ HCPCS_CODE (PK)           │
 │ FULL_NAME                 │                 │ DESCRIPTION               │
-│ MAILING_STATE_US          │                 │ CATEGORY                  │
-│ PRACTICE_STATE_US         │                 │ EFFECTIVE_DATE            │
-│ PROVIDER_STATE_US         │                 │ TERMINATION_DATE          │
+│ ORG_NAME                  │                 │ SHORT_DESCRIPTION         │
+│ PROVIDER_TYPE             │                 │ STATUS                    │
+│ PRACTICE_STATE_US         │                 │                           │
+│ MAILING_STATE_US          │                 │                           │
+│ PROVIDER_STATE_US         │                 │                           │
 │ (standardized via         │                 │                           │
-│clean_provider_states.sql) │                 │                           │
-│                           │                 │                           │                    
+│ clean_provider_states.sql)│                 │                           │
 └──────────────┬────────────┘                 └──────────────┬────────────┘
                │                                             │
                │                                             │
@@ -142,172 +266,123 @@ This creates a clean, well‑defined star schema optimized for analytics.
                    ┌──────────────────────────────────────────────┐
                    │   FACT_MEDICAID_PROVIDER_SPENDING            │
                    │──────────────────────────────────────────────│
-                   │ CLAIM_MONTH (FK → DATE_DIM.DATE)             │
-                   │ BILLING_PROVIDER_NPI (FK → NPI_DIM)          │
-                   │ RENDERING_PROVIDER_NPI (FK → NPI_DIM)        │
+                   │ CLAIM_MONTH (FK → DATE_DIM.DATE_KEY)         │
+                   │ BILLING_PROVIDER_NPI (FK → PROVIDER_DIM)     │
+                   │ SERVICING_PROVIDER_NPI (FK → PROVIDER_DIM)   │
                    │ HCPCS_CODE (FK → HCPCS_DIM)                  │
                    │ SERVICE_CATEGORY (FK → SERVICE_CATEGORY_DIM) │
-                   │ TOTAL_CLAIMS                                 │
-                   │ TOTAL_PAID_AMOUNT                            │
-                   │ AVG_PAID_AMOUNT                              │
+                   │ TOTAL_CLAIM_LINES                            │
+                   │ TOTAL_PAID                                   │
+                   │ TOTAL_PATIENTS                               │
                    └──────────────┬───────────────────────────────┘
                                   │
                                   ▼
 
                    ┌───────────────────────────┐
-                   │  SERVICE_CATEGORY_DIM     │
+                   │   SERVICE_CATEGORY_DIM    │
                    │───────────────────────────│
                    │ SERVICE_CATEGORY (PK)     │
                    │ DESCRIPTION               │
                    │ LOGIC (derived in MODEL   │
-                   │ layer via service category│ 
-                   │ mapping rules)            │
-                   │                           │ 
+                   │ layer via HCPCS patterns) │
                    └───────────────────────────┘
+
 ```
 ---
 
-## 🟦 4. Provider Dimension (NPI_DIM)
+## 🟦 5. Provider Dimension (PROVIDER_DIM)
+PROVIDER_DIM is the authoritative provider dimension for all analytics.
 
-`NPI_DIM` is created by:
-```code
-sql/provider_dimension.sql
-```
-This dimension:
-
-- Deduplicates NPI records  
-- Extracts 22 analytics‑ready fields  
-- Provides provider‑level attributes used across the fact table  
-
-### Key Fields
-
-- `NPI`
-- `PROVIDER_NAME`
-- `PROVIDER_TYPE`
-- `PRACTICE_STATE`
-- `MAILING_STATE`
-- `PRIMARY_SPECIALTY`
-- `ORGANIZATION_NAME`
+It includes:
+- NPI
+- Provider Type (Individual / Organization)
+- Full Name / Org Name
+- Unified Provider Display Name
+- PRACTICE_STATE_US / MAILING_STATE_US / PROVIDER_STATE_US
+- Taxonomy
+- Enumeration dates
+- Data quality flags
+   
+This dimension replaces NPI_DIM entirely.
 
 ---
 
-## 🟦 5. Geographic Standardization
+## 🟦 6. Geographic Standardization
 
-After `NPI_DIM` is built, geographic cleanup is performed by:
+Performed by:
 ```code
 sql/model/clean_provider_states.sql
 ```
-This script:
-
-- Creates a `STATE_REF` lookup table (50 states + 5 territories + DC + military codes)
-- Normalizes PRACTICE_STATE and MAILING_STATE using `TRIM(UPPER(...))`
-- Maps values to standardized 2‑letter codes
-- Produces:
-
+Outputs:
 | Column                | Type    | Description                                              |
 | --------------------- | ------- | -------------------------------------------------------- |
 | ``PRACTICE_STATE_US`` | VARCHAR | Cleaned U.S. state extracted from PRACTICE_STATE         |
 | ``MAILING_STATE_US``  | VARCHAR | Cleaned U.S. state extracted from MAILING_STATE          |
 | ``PROVIDER_STATE_US`` | VARCHAR | Unified state field used for Power BI geographic visuals | (COALESCE of the two)
 
-### Why this step exists
-
-Power BI geographic visuals require:
-
-- Clean, standardized state codes  
-- No NULLs  
-- No ambiguous values (e.g., “ST THOMAS VI”, “P RICO”, “USVI”)  
-
-This step ensures all provider locations are BI‑ready.
+Used for:
+- Power BI map visuals
+- Provider integrity scoring
+- Geographic drilldowns
 
 ---
 
-## 🟦 6. HCPCS Dimension (HCPCS_DIM)
+## 🟦 7. HCPCS Dimension (HCPCS_DIM)
 
 Created by:
 ```code
 sql/hcpcs_dimension.sql
 ```
-
-This dimension:
-
-- Deduplicates HCPCS codes  
-- Provides descriptions and service categories  
-- Supports fact table enrichment  
-
-### Key Fields
-
-- `HCPCS_CODE`
-- `HCPCS_DESCRIPTION`
-- `SERVICE_CATEGORY`
+Includes:
+- HCPCS_CODE
+- DESCRIPTION
+- SHORT_DESCRIPTION
+- STATUS
 
 ---
 
-## 🟦 7. Date & Service Category Dimensions (Updated)
+## 🟦 8. Date & Service Category Dimensions
 
 Created by:
 ```code
 sql/model/date_and_service_dimensions.sql
 ```
+DATE_DIM
+Includes:
+- DATE_KEY
+- DATE
+- YEAR / QUARTER / MONTH
+- YEAR_MONTH
 
-These dimensions are part of the MODEL layer and must exist **before** the fact table is built.
+Sort fields for Power BI
 
-### DATE_DIM
+SERVICE_CATEGORY_DIM
+Maps HCPCS patterns into:
+- OP
+- RX
+- OTHER
 
-A full calendar dimension including:
-
-- `DATE_KEY`
-- `DATE`
-- `YEAR`
-- `MONTH`
-- `QUARTER`
-- `DAY_OF_WEEK`
-- `IS_WEEKEND`
-
-### SERVICE_CATEGORY_DIM
-
-Maps HCPCS codes into high‑level service groups used for:
-
-- Power BI slicers  
-- Aggregations  
-- Clinical category analysis  
+Used for slicers and category analytics.
 
 ---
 
-## 🟦 8. Medicaid Spending Fact Table (FACT_PROVIDER_SPENDING)
+## 🟦 9. Medicaid Spending Fact Table (FACT_PROVIDER_SPENDING)
 
 Created by:
 ```code
 sql/medicaid_fact_table.sql
 ```
+Includes:
+- Total Paid
+- Total Claims
+- Total Patients
+- Derived service category
+- Provider attributes (via PROVIDER_DIM)
+- HCPCS attributes
 
-This fact table joins to:
+This is the single source of truth for all Medicaid spend analytics.
 
-- `NPI_DIM`
-- `HCPCS_DIM`
-- `DATE_DIM`
-- `SERVICE_CATEGORY_DIM`
-
-### Key Measures
-
-- `TOTAL_PAYMENT`
-- `SERVICE_COUNT`
-- `AVERAGE_PAYMENT`
-- `BENEFICIARY_COUNT`
-
-### Why it must run last
-
-FACT_MODEL depends on:
-
-- Clean provider states  
-- Date dimension  
-- Service category dimension  
-- Provider dimension  
-- HCPCS dimension  
-
-Running it earlier would produce NULL enrichment fields.
-
-## 8.1 🧊 When to Refresh FACT_MEDICAID
+## 9.1 🧊 When to Refresh FACT_MEDICAID
 `FACT_MEDICAID` must be refreshed whenever changes are made to the provider dimension (NPI_DIM) that affect:
 - provider names
 - organization names
@@ -316,21 +391,6 @@ Running it earlier would produce NULL enrichment fields.
 - Provider_Type
 - Data_Quality_Flag
 any other provider attributes used in analytics
-
-Although `FACT_MEDICAID` stores only foreign keys to `NPI_DIM` (e.g., `BILLING_PROVIDER_NPI`, `SERVICING_PROVIDER_NPI`), the meaning of those keys depends entirely on the dimension.
-
-You must refresh `FACT_MEDICAID` when:
-- NPI_CLEAN logic changes
-- Name cleaning rules are updated
-- Provider_Display_Name logic changes
-- Provider_Type logic changes
-- Data_Quality_Flag is added or modified
-- NPI_DIM is rebuilt
-
-You do NOT need to refresh `FACT_MEDICAID` when:
-- RAW Medicaid claims are unchanged
-- HCPCS or other unrelated dimensions are updated
-- Only ZIP or address cleaning changes in `NPI_CLEAN` (unless used in FACT)
 
 📌 Why this matters
 If `FACT_MEDICAID` is not refreshed after NPI updates, the semantic model will show:
@@ -346,13 +406,13 @@ Refreshing FACT ensures full alignment between fact and dimension tables.
 
 ---
 
-## 🧊 9. Clustering Strategy
+## 🧊 10. Clustering Strategy
 
 Clustering keys are applied to all MODEL-layer tables to improve micro‑partition pruning, reduce scan cost, and optimize query performance across the Medicaid dataset.
 
 | Table                             | Clustering Key                                   | Rationale |
-|-----------------------------------|--------------------------------------------------|-----------|
-| `NPI_DIM`                         | `CLUSTER BY (NPI)`                               | High-cardinality PK used in all provider joins |
+|-----------------------------------|--------------------------------------------------|------------------------------------------------|
+| `PROVIDER_DIM`                    | `CLUSTER BY (NPI)`                               | High-cardinality PK used in all provider joins |
 | `HCPCS_DIM`                       | `CLUSTER BY (HCPCS_CODE)`                        | Fast lookups for procedure metadata |
 | `FACT_MEDICAID_PROVIDER_SPENDING` | `CLUSTER BY (CLAIM_MONTH, BILLING_PROVIDER_NPI)` | Time-series filtering + provider-level rollups |
 
@@ -360,12 +420,15 @@ This strategy balances performance, cost, and maintainability for a 238M-row fac
 
 📌Clustering Strategy Details
 
-NPI_DIM
+PROVIDER_DIM
 Cluster Key: NPI
 Rationale:
-- Primary join key for provider enrichment
-- Small, stable dimension
-- High cardinality warning is expected and harmless
+- Primary join key for all provider enrichment in FACT
+- Small, stable dimension (low churn, minimal reclustering cost)
+- High‑cardinality warning is expected and harmless
+   > Snowflake warns on high‑cardinality keys
+   > But PROVIDER_DIM is small enough that clustering overhead is negligible
+- Ensures fast provider lookups for both billing and servicing provider joins
 
 HCPCS_DIM
 Cluster Key: HCPCS_CODE
@@ -386,7 +449,7 @@ This clustering strategy balances performance, cost, and maintainability, follow
 
 
 ---
-## 🟦 10. Legacy Servicing Provider Dimension
+## 🟦 11. Legacy Servicing Provider Dimension
 
 `LEGACY_SERVICING_PROVIDER_DIM` classifies non‑NPI servicing provider identifiers found in Medicaid claims.  
 These identifiers are valid within Medicaid systems but do not conform to the 10‑digit NPI format.
@@ -438,7 +501,7 @@ This dimension supports:
 - Power BI drilldowns for atypical providers
 
 
-## 🟦 11. Data Quality Trend Tables
+## 🟦 12. Data Quality Trend Tables
 
 The MODEL layer includes two data quality monitoring tables that track invalid NPIs over time and detect anomalies in provider identifier behavior.
 
@@ -446,7 +509,7 @@ These tables support the Provider Integrity Framework and Power BI DQ dashboards
 
 ---
 
-### 11.1 DQ_INVALID_NPI_TREND
+### 12.1 DQ_INVALID_NPI_TREND
 
 This table tracks the **monthly count of invalid NPIs** across the Medicaid dataset.
 
@@ -464,7 +527,7 @@ Key Fields:
 + `CLAIM_MONTH`
 + `INVALID_CLAIMS`
 
-### 11.2 DQ_INVALID_NPI_ANOMALIES
+### 12.2 DQ_INVALID_NPI_ANOMALIES
 A lightweight anomaly detector that flags spikes or drops in invalid NPIs using a 3‑sigma statistical threshold.
 
 Created by:
@@ -490,7 +553,7 @@ These trend and anomaly tables provide:
 
 They ensure the MODEL layer remains trustworthy, explainable, and BI‑ready.
 
-## 🟦 12. Provider Integrity Framework — Narrative Summary
+## 🟦 13. Provider Integrity Framework — Narrative Summary
 The Provider Integrity Framework evaluates the quality, validity, and historical behavior of provider identifiers across the Medicaid dataset. It explains why invalid NPIs appear, how they affect claims, and how the MODEL layer resolves them through unified dimensions, legacy‑ID classification, and automated monitoring.
 
 ### 1. Overview
@@ -558,12 +621,12 @@ Power BI uses these MODEL objects to deliver:
 This framework ensures Medicaid provider data is **accurate, explainable, and BI‑ready**, supporting both operational analytics and program integrity initiatives.
 
 
-## 🟦 13. Power BI Semantic Model (Updated)
+## 🟦 14. Power BI Semantic Model (Updated)
 
 The Power BI semantic model consumes all MODEL‑layer dimensional objects and fact tables, including the new Provider Integrity components.  
 This ensures that provider‑level analytics, data quality monitoring, and program integrity insights are fully integrated into the BI layer.
 
-### 13.1 Required Tables
+### 14.1 Required Tables
 
 Power BI connects to the following MODEL objects:
 
@@ -587,7 +650,7 @@ These tables support:
 
 ---
 
-### 13.2 Relationships
+### 14.2 Relationships
 
 The semantic model includes the following relationships:
 
@@ -603,7 +666,7 @@ This structure enables unified provider analytics across both valid NPIs and leg
 
 ---
 
-### 13.3 Measures (Updated)
+### 14.3 Measures (Updated)
 
 The semantic model includes new measures to support provider integrity analysis:
 
@@ -619,7 +682,7 @@ These measures power the Provider Integrity Scorecard and DQ dashboards.
 
 ---
 
-### 13.4 Power BI Pages (Updated)
+### 14.4 Power BI Pages (Updated)
 
 The dashboard includes the following pages:
 
@@ -654,7 +717,7 @@ The dashboard includes the following pages:
 
 ---
 
-### 13.5 Why This Matters
+### 14.5 Why This Matters
 
 Integrating Provider Integrity into the semantic model ensures:
 
