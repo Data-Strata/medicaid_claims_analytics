@@ -336,14 +336,6 @@ This structure provides a complete narrative:
 **Overview → Provider Integrity → Clinical Utilization → Category Insights → Data Quality → Documentation.**
 
 
-## 🛠️ Technologies Used
-
-- **Snowflake** — Warehouse, Stages, Clustering, SQL
-- **SnowSQL CLI** — COPY INTO and Orchestration
-- **Power BI** — Semantic model + Dashboard
-- **PowerShell / curl.exe**(file ingestion)
-- **GitHub** — Version control & documentation
-
 ## 🎯 What This Project Demonstrates
 - Real‑world ingestion of multi‑GB healthcare datasets
 - Medallion architecture (RAW → STAGE → MODEL → INTEGRITY → BI)
