@@ -176,7 +176,23 @@ CALCULATE ( [Total Claims], FACT_MEDICAID_PROVIDER_SPENDING[SERVICE_CATEGORY] = 
 Paid amounts:
 ```DAX
 OP Paid Amount =
-CALCULATE ( [Total Paid Amount], FACT_MEDICAID_PROVIDER_SPENDING[SERVICE_CATEGORY] = "OP" )
+CALCULATE(
+    [Total Paid Amount],
+    FACT_MEDICAID_PROVIDER_SPENDING[SERVICE_CATEGORY] = "OP"
+)
+
+RX Paid Amount =
+CALCULATE(
+    [Total Paid Amount],
+    FACT_MEDICAID_PROVIDER_SPENDING[SERVICE_CATEGORY] = "RX"
+)
+
+Other Paid Amount =
+CALCULATE(
+    [Total Paid Amount],
+    FACT_MEDICAID_PROVIDER_SPENDING[SERVICE_CATEGORY] = "OTHER"
+)
+
 ```
 
 # 6. Provider Analytics Measures
@@ -215,6 +231,102 @@ Asumes:
 ```DAX
 DATE_DIM[DATE_KEY] → FACT_MEDICAID_PROVIDER_SPENDING[CLAIM_MONTH]
 ```
+
+8.3 🔎 Data Completeness Logic (Full‑Month Filtering)
+Purpose:  
+Ensure that trend visuals only display fully reported months, preventing misleading declines caused by partial provider submissions or incomplete ingestion cycles.
+
+Background:  
+The most recent month in FACT_MEDICAID_PROVIDER_SPENDING may contain significantly fewer rows (e.g., ~900K vs 2.3M–3.4M), indicating incomplete reporting.
+To avoid distorting the Medicaid spend trend, incomplete months are automatically excluded.
+
+DAX — Paid Amount (Full Months Only)
+Used in the main trend visual to hide incomplete months.
+
+```DAX
+Paid Amount (Full Months Only) =
+VAR LastFactDate =
+    CALCULATE(
+        MAX(FACT_MEDICAID_PROVIDER_SPENDING[CLAIM_MONTH]),
+        ALL(FACT_MEDICAID_PROVIDER_SPENDING)
+    )
+
+VAR LastFullMonth =
+    EOMONTH(LastFactDate, -1)
+
+VAR CurrentDate =
+    MAX(DATE_DIM[DATE_KEY])
+
+RETURN
+IF(
+    CurrentDate <= LastFullMonth,
+    [Total Paid Amount]
+)
+```
+
+DAX — Lowest Paid Amount (Full Months Only)
+Ensures the low‑point marker aligns with full‑month data only.
+
+```DAX
+Lowest Paid Amount (Full Months Only) =
+VAR LastFactDate =
+    CALCULATE(
+        MAX(FACT_MEDICAID_PROVIDER_SPENDING[CLAIM_MONTH]),
+        ALL(FACT_MEDICAID_PROVIDER_SPENDING)
+    )
+
+VAR LastFullMonth =
+    EOMONTH(LastFactDate, -1)
+
+VAR MinValue =
+    MINX(
+        FILTER(
+            ALL(DATE_DIM),
+            DATE_DIM[DATE_KEY] <= LastFullMonth
+        ),
+        [Total Paid Amount]
+    )
+
+RETURN
+IF(
+    [Total Paid Amount] = MinValue,
+    [Total Paid Amount]
+)
+```
+
+DAX — Data Completeness KPI
+Displayed as a card on the Overview page.
+
+```DAX
+Data Completeness KPI =
+VAR LastFactMonth =
+    CALCULATE(
+        MAX(FACT_MEDICAID_PROVIDER_SPENDING[CLAIM_MONTH]),
+        ALL(FACT_MEDICAID_PROVIDER_SPENDING)
+    )
+
+VAR RowCount =
+    CALCULATE(
+        COUNTROWS(FACT_MEDICAID_PROVIDER_SPENDING),
+        FACT_MEDICAID_PROVIDER_SPENDING[CLAIM_MONTH] = LastFactMonth
+    )
+
+VAR Threshold = 2000000   -- Typical month: 2.3M–3.4M rows
+
+RETURN
+IF(
+    RowCount < Threshold,
+    "⚠️ Latest Month Incomplete",
+    "✔ Latest Month Complete"
+)
+```
+Usage Notes
+- The trend visual uses Paid Amount (Full Months Only) to avoid showing incomplete months.
+- Peak and low markers use the corresponding Full Months Only measures.
+- The KPI card provides transparency to stakeholders regarding data freshness and completeness.
+- This logic ensures the dashboard reflects true Medicaid spend trends, not ingestion artifacts.
+
+
 
 # 9. Top‑N Measures
 
@@ -265,6 +377,9 @@ The layout follows a logical narrative: executive overview → provider integrit
 ---
 
 ## 📘 11.1 Page 1 — Medicaid Spending Overview
+
+⭐The Executive Overview page provides a high‑level assessment of Medicaid program performance, highlighting total spend, utilization volume, patient reach, and provider participation across the United States. The combination of KPIs, trend analysis, service category distribution, and geographic spend patterns enables leadership to quickly identify macro‑level shifts in Medicaid spending, emerging utilization trends, and state‑level variations. This page serves as the primary entry point for understanding where Medicaid dollars are flowing, how spending has evolved over time, and which provider groups drive the largest share of program costs.
+
 **Purpose:** Executive‑level summary of Medicaid spend, utilization, and geographic distribution.
 
 **Key Visuals**
@@ -275,6 +390,28 @@ The layout follows a logical narrative: executive overview → provider integrit
 - Filled Map: Paid Amount by Provider State (filtered to continental U.S.)
 
 This page provides the “big picture” view of Medicaid program performance.
+
+⭐ Interaction Rules
+The Executive Overview page is designed with intuitive, consistent interaction patterns that carry across the entire dashboard:
+
+- Billing vs Servicing Toggle  
+The provider role toggle applies at the model level and automatically filters all pages. Selecting Billing or Servicing on Page 1 updates every visual on Page 1 and persists when navigating to Pages 2–6.
+
+- Cross‑Page Consistency  
+Because the toggle filters the semantic model, all downstream pages (Provider Integrity, HCPCS Explorer, Category Analytics, etc.) inherit the same provider role context unless explicitly overridden.
+
+- Visual Interactions
+  > Selecting a state on the map filters the Top Providers visuals and the service category donut.
+  > Selecting a provider in the Top 10 visuals filters the KPI row and category distribution.
+  > Hover tooltips provide additional detail without altering page‑level filters.
+
+- Full‑Month Filtering  
+Trend visuals automatically exclude incomplete months using the Paid Amount (Full Months Only) measure, ensuring accurate interpretation of spend patterns.
+
+These rules ensure a predictable, transparent user experience across the entire dashboard.
+
+⭐ Executive Narrative 
+The Executive Overview page tells a clear, data‑driven story of Medicaid spending. It begins with a KPI row that quantifies the scale of the program—total paid amount, claims volume, patient reach, and provider participation. The trend visual contextualizes how spending has evolved over time, highlighting peaks, troughs, and structural shifts in utilization. The service category donut breaks down spend across OP, RX, and OTHER categories, revealing where Medicaid dollars are concentrated. The geographic map surfaces state‑level variation in spending, while the Top 10 Providers visuals identify the largest organizational and individual contributors to Medicaid costs. Together, these elements provide leadership with a comprehensive, at‑a‑glance understanding of program performance and emerging patterns.
 
 ---
 
@@ -351,7 +488,7 @@ This page reinforces the professionalism and completeness of the analytics solut
 | Version | Date       | Author   | Description                              |
 | ------- | ---------- | -------- | ---------------------------------------- |
 | 1.0     | 2026‑04‑05 | Mairilyn | Initial dashboard design + DAX guidelines |
-
+| 1.1     | 2026‑05‑19 | Mairilyn | Added Data Completeness KPI, Full‑Month Filtering logic, and updated Paid Amount Trend to exclude incomplete months |
 
 
 ---
