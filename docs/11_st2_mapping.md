@@ -446,8 +446,93 @@ The current FACT derivation logic assigns only RX, OP, and OTHER.
 ED/IP will be populated in a future enhancement.
 
 ---
+📘 8. S2T Mapping — PROVIDER_ROLE_PERCENTILE (New MODEL Object)
+Source → Transform → Target (MODEL Layer)
 
-## 🔗 8. Join Relationships
+🟦 Source Tables
+| Source Table                              | Columns Used                                             | Notes |
+| ----------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
+| ``MODEL.FACT_MEDICAID_PROVIDER_SPENDING`` | BILLING_PROVIDER_NPI, SERVICING_PROVIDER_NPI, TOTAL_PAID | Fact grain: (CLAIM_MONTH, BILLING_PROVIDER_NPI, 
+                                                                                                          SERVICING_PROVIDER_NPI, HCPCS_CODE, SERVICE_CATEGORY) |
+| ``MODEL.PROVIDER_DIM``                    | NPI                                                      | Used for referential integrity during enrichment       |
+
+🟦 Transform Logic
+
+Step 1 — Aggregate Paid Amount by Provider Role
+Purpose:  
+Compute total paid amount separately for Billing and Servicing providers.
+```sql
+CREATE OR REPLACE TABLE MODEL.PROVIDER_ROLE_PAID_SUMMARY AS
+
+-- BILLING PROVIDERS
+SELECT
+    m.BILLING_PROVIDER_NPI AS NPI,
+    'Billing' AS PROVIDER_ROLE,
+    SUM(m.TOTAL_PAID_AMOUNT) AS TOTAL_PAID_AMOUNT,
+    p.ENTITY_TYPE_CODE
+FROM MODEL.FACT_MEDICAID_PROVIDER_SPENDING m
+LEFT JOIN MODEL.PROVIDER_DIM p
+    ON m.BILLING_PROVIDER_NPI = p.NPI
+WHERE m.TOTAL_PAID_AMOUNT > 0
+  AND p.NPI IS NOT NULL
+  AND p.ENTITY_TYPE_CODE IN (1, 2)   -- 1 = Individual, 2 = Organization
+GROUP BY
+    m.BILLING_PROVIDER_NPI,
+    p.ENTITY_TYPE_CODE
+
+UNION ALL
+
+-- SERVICING PROVIDERS
+SELECT
+    m.SERVICING_PROVIDER_NPI AS NPI,
+    'Servicing' AS PROVIDER_ROLE,
+    SUM(m.TOTAL_PAID_AMOUNT) AS TOTAL_PAID_AMOUNT,
+    p.ENTITY_TYPE_CODE
+FROM MODEL.FACT_MEDICAID_PROVIDER_SPENDING m
+LEFT JOIN MODEL.PROVIDER_DIM p
+    ON m.SERVICING_PROVIDER_NPI = p.NPI
+WHERE m.TOTAL_PAID_AMOUNT > 0
+  AND p.NPI IS NOT NULL
+  AND p.ENTITY_TYPE_CODE IN (1, 2)
+GROUP BY
+    m.SERVICING_PROVIDER_NPI,
+    p.ENTITY_TYPE_CODE;
+
+```
+
+Step 2 — Compute Percentile Rank Within Each Role
+Purpose:  
+Rank providers within Billing and Servicing populations.
+
+```sql
+CREATE OR REPLACE TABLE MODEL.PROVIDER_ROLE_PERCENTILE AS
+SELECT
+    NPI,
+    PROVIDER_ROLE,
+    TOTAL_PAID_AMOUNT,
+    ENTITY_TYPE,
+    PERCENT_RANK() OVER (
+        PARTITION BY PROVIDER_ROLE
+        ORDER BY TOTAL_PAID_AMOUNT DESC
+    ) AS PAID_AMOUNT_PERCENTILE
+FROM MODEL.PROVIDER_ROLE_PAID_SUMMARY;
+
+```
+- Highest spender in each role → 1.0
+- Lowest spender in each role → 0.0
+
+🟦 Target Table: `MODEL.PROVIDER_ROLE_PERCENTILE`
+| Column Name                | Type    | Description                                    |
+| -------------------------- | ------- | ---------------------------------------------- |
+| ``NPI``                    | VARCHAR | Provider identifier                            |
+| ``PROVIDER_ROLE``          | VARCHAR | Billing or Servicing                           |
+| ``TOTAL_PAID_AMOUNT``      | NUMBER  | Total paid amount aggregated by role           |
+| ``ENTITY TYPE``            | NUMBER  | 1 - INDIVIDUALS, 2 - ORGANIZATIONS             |
+| ``PAID_AMOUNT_PERCENTILE`` | FLOAT   | Percentile rank (0.0–1.0) within provider role |
+
+---
+
+## 🔗 9. Join Relationships
 
 ### Star Schema Relationships
 
@@ -468,17 +553,17 @@ SERVICE_CATEGORY_DIM (SERVICE_CATEGORY)
 
 ### Foreign Key Constraints (Documentation Only)
 
-| FACT Column | References | Cardinality | Join Type |
-|-------------|-----------|-------------|-----------|
-| `BILLING_PROVIDER_NPI` | `NPI_DIM(NPI)` | Many-to-One | LEFT JOIN |
-| `SERVICING_PROVIDER_NPI` | `NPI_DIM(NPI)` | Many-to-One | LEFT JOIN |
-| `HCPCS_CODE` | `HCPCS_DIM(HCPCS_CODE)` | Many-to-One | LEFT JOIN |
-| `CLAIM_MONTH` | `DATE_DIM(DATE_KEY)` | Many-to-One | JOIN |
-| `SERVICE_CATEGORY` | `SERVICE_CATEGORY_DIM(SERVICE_CATEGORY)` | Many-to-One | JOIN |
+| FACT Column             | References             | Cardinality | Join Type |
+|-------------------------|------------------------|-------------|-----------|
+| `BILLING_PROVIDER_NPI`  | `NPI_DIM(NPI)`         | Many-to-One | LEFT JOIN |
+| `SERVICING_PROVIDER_NPI`| `NPI_DIM(NPI)`         | Many-to-One | LEFT JOIN |
+| `HCPCS_CODE`            | `HCPCS_DIM(HCPCS_CODE)`| Many-to-One | LEFT JOIN |
+| `CLAIM_MONTH`           | `DATE_DIM(DATE_KEY)`   | Many-to-One | JOIN |
+| `SERVICE_CATEGORY`      | `SERVICE_CATEGORY_DIM(SERVICE_CATEGORY)` | Many-to-One | JOIN |
 
 ---
 
-## 📘 8.1 Integrity Layer (Downstream Data Quality Tables)
+## 📘 9.1 Integrity Layer (Downstream Data Quality Tables)
 
 The Integrity Layer consists of downstream MODEL tables that monitor provider data quality, NPI validity, and legacy identifier behavior.  
 These tables are **not part of the RAW → STAGE → MODEL S2T mapping**, but they are included here for completeness and lineage visibility.
@@ -496,6 +581,8 @@ These tables are **not part of the RAW → STAGE → MODEL S2T mapping**, but th
 | `LEGACY_SERVICING_PROVIDER_DIM` | Maps legacy servicing provider IDs to inferred provider attributes | 1 row per legacy servicing provider ID |
 | `DQ_INVALID_NPI_TREND` | Monthly counts and rates of invalid NPIs | 1 row per month |
 | `DQ_INVALID_NPI_ANOMALIES` | Flags anomaly months using threshold logic | 1 row per anomaly event |
+| `PROVIDER_ROLE_PERCENTILE` | Compute percentile rank by role | 1 row per NPI & Role(BILLING/SERVICING) |
+
 
 ### Lineage Position
 These tables sit **downstream of the MODEL layer**, after:
@@ -521,7 +608,7 @@ They do **not** feed back into FACT tables and do **not** participate in the sta
 
 ---
 
-## 📘 8.2 End‑to‑End Execution Order (Authoritative)
+## 📘 9.2 End‑to‑End Execution Order (Authoritative)
 
 The Medicaid data pipeline must be executed in a strict dependency order to ensure
 data integrity, correct dimensional joins, and accurate Power BI behavior.
@@ -564,17 +651,24 @@ Purpose: build conformed dimensions required by FACT tables.
 
 ### 🟥 4. FACT Layer (Dependent on All Dimensions)
 13. `FACT_MEDICAID_PROVIDER_SPENDING`  
-14. `FACT_PROVIDER_MONTHLY`  
-15. `FACT_HCPCS_MONTHLY`
+Purpose: produce analytics‑ready fact table
 
-Purpose: produce analytics‑ready fact tables at the correct grain.
+---
+
+### 🟦 4.5 MODEL Enrichment Layer (New)
+14. provider_role_percentile.sql  
+Purpose:
+- Computes Billing + Servicing percentile ranks
+- Produces PROVIDER_ROLE_PERCENTILE
+- Loaded into Power BI and related to PROVIDER_DIM
+- Does NOT modify PROVIDER_DIM
 
 ---
 
 ### 🟧 5. Integrity Layer (Downstream DQ Tables)
-16. `LEGACY_SERVICING_PROVIDER_DIM`  
-17. `DQ_INVALID_NPI_TREND`  
-18. `DQ_INVALID_NPI_ANOMALIES`
+15. `LEGACY_SERVICING_PROVIDER_DIM`  
+16. `DQ_INVALID_NPI_TREND`  
+17. `DQ_INVALID_NPI_ANOMALIES`
 
 Purpose: monitor provider data quality, NPI validity, and anomaly detection.
 
@@ -587,19 +681,35 @@ Purpose: monitor provider data quality, NPI validity, and anomaly detection.
     - Time intelligence  
     - Provider integrity dashboards  
 
-Purpose: deliver analytics to end users.
+> PROVIDER_ROLE_PERCENTILE Imported as a separate table
+✔ Relationship created in Power BI:
+
+| From Table   | Column | To Table                 | Column | Cardinality |
+| ------------ | ------ | ------------------------ | ------ | ----------- |
+| PROVIDER_DIM | NPI    | PROVIDER_ROLE_PERCENTILE | NPI    | 1:*         |
+
+✔ Provider Role slicer filters PROVIDER_ROLE_PERCENTILE.PROVIDER_ROLE
+✔ Percentile values flow into visuals via DAX
+
+
+| Layer | Object                     | Action                        |
+| ----- | -------------------------- | ----------------------------- |
+| MODEL | PROVIDER_ROLE_PAID_SUMMARY | Aggregate paid amount by role |
+| MODEL | PROVIDER_ROLE_PERCENTILE | Compute percentile rank by role |
+| SEMANTIC MODEL | PROVIDER_ROLE_PERCENTILE | Related to PROVIDER_DIM via NPI |
+| SEMANTIC MODEL | DAX Measure | Returns role‑aware percentile |
 
 ---
 
 ### Notes
-- Dimensions **must** be built before FACT tables.  
+- Dimensions **must** be built before FACT table.  
 - Geographic standardization must run **after** NPI_DIM but **before** FACT.  
 - Integrity Layer tables depend on FACT + DATE_DIM.  
 - Power BI refresh is the final step in the chain.  
 
 ---
 
-## 🧮 9. Transformation Logic Summary
+## 🧮 10. Transformation Logic Summary
 
 ### Direct Loads
 - NPI → `NPI_DIM`
@@ -651,7 +761,7 @@ Purpose: deliver analytics to end users.
 
 ---
 
-## 📘 10. FACT_MEDICAID_PROVIDER_SPENDING  
+## 📘 11. FACT_MEDICAID_PROVIDER_SPENDING  
 **Layer:** MODEL (Analytics Layer)  
 **SQL File:** `sql/fact/medicaid_fact_table.sql`  
 **Grain:**  
@@ -662,7 +772,7 @@ It is the central fact table used by Power BI and downstream analytics.
 
 ---
 
-## 10.1 Source Tables
+## 11.1 Source Tables
 
 | Layer | Table | Purpose |
 |-------|--------|----------|
@@ -674,7 +784,7 @@ It is the central fact table used by Power BI and downstream analytics.
 
 ---
 
-## 10.2 Field Mapping (RAW → STAGE → FACT)
+## 11.2 Field Mapping (RAW → STAGE → FACT)
 
 | FACT Field | Source | Transformation |
 |------------|--------|----------------|
@@ -698,7 +808,7 @@ It is the central fact table used by Power BI and downstream analytics.
 
 ---
 
-## 10.3 Service Category Logic (HCPCS‑Based)
+## 11.3 Service Category Logic (HCPCS‑Based)
 
 ```sql
 CASE
@@ -715,7 +825,7 @@ Notes:
 - Current dataset does not contain ED/IP HCPCS patterns.
 - S2T documents this intentional mismatch.
 
-10.4 Dimension Joins (Updated to PROVIDER_DIM)
+11.4 Dimension Joins (Updated to PROVIDER_DIM)
 | Dimension                | Join Key                     | Notes |
 | ------------------------ | ---------------------------- | ------------------------- |
 | PROVIDER_DIM (Billing)   | BILLING_PROVIDER_NPI → NPI   | Clean provider attributes |
@@ -724,7 +834,7 @@ Notes:
 | DATE_DIM                 | CLAIM_MONTH → DATE_KEY       | Calendar attributes |
 | SERVICE_CATEGORY_DIM     | SERVICE_CATEGORY             | Category metadata |
 
-10.5 SQL Implementation (Excerpt)
+11.5 SQL Implementation (Excerpt)
 ```sql
 CREATE OR REPLACE TABLE FACT_MEDICAID_PROVIDER_SPENDING AS
 SELECT
@@ -766,7 +876,7 @@ LEFT JOIN ANALYTICS_MEDICAID.MODEL.HCPCS_DIM h
     ON s.HCPCS_CODE = h.HCPCS_CODE;
 
 ```
-10.6 Validation
+11.6 Validation
 ```sql
 SELECT COUNT(*) AS FACT_ROW_COUNT
 FROM FACT_MEDICAID_PROVIDER_SPENDING;
@@ -779,14 +889,14 @@ ORDER BY COUNT(*) DESC;
 
 ```
 
-10.7 Clustering
+11.7 Clustering
 ```sql
 ALTER TABLE ANALYTICS_MEDICAID.MODEL.FACT_MEDICAID_PROVIDER_SPENDING
   CLUSTER BY (CLAIM_MONTH, BILLING_PROVIDER_NPI);
 
 ```
 
-10.8 Foreign Keys (Documentation Only)
+11.8 Foreign Keys (Documentation Only)
 ```sql
 -- Billing provider → PROVIDER_DIM
 FOREIGN KEY (BILLING_PROVIDER_NPI)
@@ -801,7 +911,7 @@ FOREIGN KEY (HCPCS_CODE)
   REFERENCES HCPCS_DIM (HCPCS_CODE);
 ```
 
-10.9 Notes & Decisions
+11.9 Notes & Decisions
 - PROVIDER_DIM replaces NPI_DIM as the authoritative provider dimension.
 - Monthly FACT tables removed (Power BI performs monthly aggregations).
 - FACT grain updated to reflect actual implementation.
@@ -810,7 +920,7 @@ FOREIGN KEY (HCPCS_CODE)
 
 ---
 
-## 📊 11. Power BI Semantic Model Usage
+## 📊 12. Power BI Semantic Model Usage
 
 ### Star Schema in Power BI (Updated)
 
@@ -875,7 +985,7 @@ DAX measures are defined in the Power BI semantic layer and documented in:
 
 ---
 
-## 🧭 12. How to Use This Document
+## 🧭 13. How to Use This Document
 
 ### Engineers
 - Implement SQL transformations based on documented lineage
@@ -899,7 +1009,7 @@ DAX measures are defined in the Power BI semantic layer and documented in:
 
 ---
 
-## 🧩 13. Why S2T Matters in Medicaid / EDS Work
+## 🧩 14. Why S2T Matters in Medicaid / EDS Work
 
 State Medicaid programs and Enterprise Data Systems rely on:
 
@@ -921,7 +1031,7 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
 
 ---
 
-## 🗂️ 14. Versioning & Change Log
+## 🗂️ 15. Versioning & Change Log
 
 | Version | Date       | Author           | Description                                                                             |
 |---------|------------|------------------|-----------------------------------------------------------------------------------------|
@@ -933,13 +1043,15 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
 | **2.1** | 2026-05-07 | Mairilyn Yera    | Corrected Full_Name construction, added Provider_Display_Name, Provider_Type and Data_Quality_Flag
 | **2.2** | 2026-05-10 | Mairilyn Yera    | Added section 10 on mapping for the Medicaid Provider Spending pipeline and updated section 11 to include 2 new Fact tables
 | **2.3** | 2026-05-15 | Mairilyn Yera    | Updated Model Layer, added Integrity Layer, introduced Provider_DIM as a cleaned streamline NPI dimesion table and Drop Fact tables
+| **2.4** | 2026-05-22 | Mairilyn Yera    | Added Provider_Role_Percentile to Model Layer
+
 
 
 **Note**: All changes follow semantic versioning and include brief descriptions of modifications.
 
 ---
 
-## 📁 15. SQL Reference Files
+## 📁 16. SQL Reference Files
 
 This section lists all SQL files used across the RAW → STAGE → MODEL → FACT → Integrity Layer pipeline.
 Files are grouped by functional layer for clarity and traceability.
@@ -983,6 +1095,7 @@ Files are grouped by functional layer for clarity and traceability.
 | `DATE_DIM` | `sql/model/date_and_service_dimensions.sql` |
 | `SERVICE_CATEGORY_DIM` | `sql/model/date_and_service_dimensions.sql` |
 | `STATE_REF` (Geographic Standardization) | `sql/model/clean_provider_states.sql` |
+| `PROVIDER_ROLE_PERCENTILE` () | `sql/model/provider_role_percentile.sql`
 
 ---
 
@@ -1026,7 +1139,7 @@ Files are grouped by functional layer for clarity and traceability.
 
 ---
 
-## 📘 16. Final S2T Consistency Check
+## 📘 17. Final S2T Consistency Check
 
 This section validates that all components of the S2T are internally consistent and aligned with
 the actual SQL implementation, MODEL layer logic, FACT grain, and Power BI semantic model.
@@ -1035,7 +1148,7 @@ The following checks confirm that the S2T accurately represents the Medicaid ana
 
 ---
 
-### ✔ 16.1 Dimension Consistency
+### ✔ 17.1 Dimension Consistency
 
 - **SERVICE_CATEGORY_DIM**
   - Dimension values match the MODEL script: `ED`, `IP`, `OP`, `RX`, `OTHER`
@@ -1054,7 +1167,7 @@ The following checks confirm that the S2T accurately represents the Medicaid ana
 
 ---
 
-### ✔ 16.2 FACT Consistency
+### ✔ 17.2 FACT Consistency
 
 - **FACT_MEDICAID_PROVIDER_SPENDING**
   - Grain updated to:  
@@ -1069,7 +1182,7 @@ The following checks confirm that the S2T accurately represents the Medicaid ana
 
 ---
 
-### ✔ 16.3 Execution Order Consistency
+### ✔ 17.3 Execution Order Consistency
 
 - Execution order updated to reflect:
   - RAW → STAGE → MODEL → FACT → Integrity Layer → BI
@@ -1079,7 +1192,7 @@ The following checks confirm that the S2T accurately represents the Medicaid ana
 
 ---
 
-### ✔ 16.4 Lineage Consistency
+### ✔ 17.4 Lineage Consistency
 
 - All lineage diagrams and descriptions reflect:
   - Single source of truth for claim-level logic
@@ -1089,7 +1202,7 @@ The following checks confirm that the S2T accurately represents the Medicaid ana
 
 ---
 
-### ✔ 16.5 Naming & Documentation Consistency
+### ✔ 17.5 Naming & Documentation Consistency
 
 - All table names match actual SQL files
 - All column names match actual SQL definitions
@@ -1099,7 +1212,7 @@ The following checks confirm that the S2T accurately represents the Medicaid ana
 
 ---
 
-### ✔ 16.6 BI Semantic Layer Consistency
+### ✔ 17.6 BI Semantic Layer Consistency
 
 - Star schema relationships match FACT grain
 - DATE_DIM joins on DATE_KEY
@@ -1109,28 +1222,12 @@ The following checks confirm that the S2T accurately represents the Medicaid ana
 
 ---
 
-### ✔ 16.7 Integrity Layer Consistency
+### ✔ 17.7 Integrity Layer Consistency
 
 - Integrity Layer documented as downstream
 - Not part of S2T mapping
 - Correct lineage: FACT → DQ tables
 - Correct purpose: monitoring, anomaly detection, legacy ID mapping
-
----
-
-### ✔ 16.8 Final Validation
-
-All S2T sections now:
-- Match the actual SQL implementation
-- Match the MODEL layer logic
-- Match the FACT grain
-- Match the Power BI semantic model
-- Match the execution order
-- Match the lineage diagrams
-- Match the business rules
-- Match the documentation in `/docs`
-
-The S2T is now **fully consistent, audit‑ready, and enterprise‑grade**.
 
 
 ---
