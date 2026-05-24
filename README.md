@@ -86,6 +86,7 @@ medicaid_claims_analytics/
 │   ├── ── Model ───────────────────   
 │   ├── date_and_service_dimensions.sql     # Creates DATE_DIM and SERVICE_DIM for BI semantic modeling
 │   ├── clean_provider_states.sql           # Standardizes PRACTICE_STATE and MAILING_STATE into U.S. state abbreviations (MODEL layer)
+│   ├── provider_role_percentile.sql        # Calculates percentile rank per provider per role. 
 │   ├── legacy_servicing_provider_dim.sql   # MODEL table classifying non‑NPI servicing IDs into provider categories
 │   ├── dq_invalid_npi_trend.sql            # Monthly trend table counting invalid NPIs across the dataset
 │   ├── dq_invalid_npi_anomalies.sql        # Statistical anomaly detector identifying spikes/drops in invalid NPIs
@@ -126,7 +127,7 @@ medicaid_claims_analytics/
   `docs/17_provider_integrity_scorecard.md`  
   `docs/18_legacy_servicing_provider_registry.md`  
   `docs/21_dq_anomaly_detection.md`
-
+ 
 
 ## 🧭 Architecture Overview
 A unified medallion‑style warehouse:
@@ -334,7 +335,6 @@ The Medicaid Provider Spending dashboard is organized into **six pages**, each a
 
 This structure provides a complete narrative:  
 **Overview → Provider Integrity → Clinical Utilization → Category Insights → Data Quality → Documentation.**
-
 
 ## 🎯 What This Project Demonstrates
 - Real‑world ingestion of multi‑GB healthcare datasets
