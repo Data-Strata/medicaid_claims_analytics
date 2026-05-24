@@ -256,7 +256,169 @@ After all three pipelines complete, validate dimension join coverage:
 
 ---
 
-## ⭐ 8. Complete SQL File Inventory
+## 🟦 8. Provider Role Paid Summary & Percentile Pipeline
+This section documents the ETL logic used to generate the provider‑level paid amount summary and percentile rankings for both Billing and Servicing providers. These tables support the Power BI semantic model, including:
+
+- Top 10 Providers (Billing / Servicing)
+- Provider percentile KPIs
+- Provider risk scoring
+- Entity‑type segmentation (Organizations vs Individuals)
+
+This pipeline normalizes provider roles, filters invalid providers, aggregates paid amounts, and computes percentiles in a clean, reproducible manner.
+### 8.1 Overview
+Medicaid claims contain two distinct provider roles:
+- Billing Provider — the entity submitting the claim
+- Servicing Provider — the entity rendering the service
+
+To support analytics, these roles must be normalized into a unified structure:
+| NPI | Provider Role | Total Paid Amount | Entity Type |
+
+This enables:
+- Consistent ranking
+- Clean percentile distributions
+- Role‑based comparisons
+- Toggle‑driven Power BI visuals
+
+### 8.2 Business Rules
+The following rules apply to the provider summary and percentile pipeline:
+
+Included Providers
+- Must appear in FACT_MEDICAID_PROVIDER_SPENDING
+- Must have TOTAL_PAID_AMOUNT > 0
+- Must have a valid NPI present in PROVIDER_DIM
+- Must have ENTITY_TYPE_CODE IN (1, 2)
+    > 1 = Individual
+    > 2 = Organization
+
+Excluded Providers
+- Blank or NULL NPIs
+- Unknown entity types
+- DIM‑only NPIs (never appear in claims)
+- Providers with zero paid amounts
+- Invalid or malformed NPIs
+
+Percentile Logic
+- Percentiles are calculated separately for:
+- Billing providers
+- Servicing providers
+
+This ensures the Power BI Billing/Servicing toggle aligns with Snowflake.
+
+### 8.3 Provider Role Paid Summary Table
+This table aggregates total paid amounts for each provider role.
+Billing and Servicing providers are processed separately and then combined using UNION ALL.
+Table: `MODEL.PROVIDER_ROLE_PAID_SUMMARY`
+```sql
+CREATE OR REPLACE TABLE MODEL.PROVIDER_ROLE_PAID_SUMMARY AS
+
+-- BILLING PROVIDERS
+SELECT
+    m.BILLING_PROVIDER_NPI AS NPI,
+    'Billing' AS PROVIDER_ROLE,
+    SUM(m.TOTAL_PAID_AMOUNT) AS TOTAL_PAID_AMOUNT,
+    p.ENTITY_TYPE_CODE
+FROM MODEL.FACT_MEDICAID_PROVIDER_SPENDING m
+LEFT JOIN MODEL.PROVIDER_DIM p
+    ON m.BILLING_PROVIDER_NPI = p.NPI
+WHERE m.TOTAL_PAID_AMOUNT > 0
+  AND p.NPI IS NOT NULL
+  AND p.ENTITY_TYPE_CODE IN (1, 2)
+GROUP BY
+    m.BILLING_PROVIDER_NPI,
+    p.ENTITY_TYPE_CODE
+
+UNION ALL
+
+-- SERVICING PROVIDERS
+SELECT
+    m.SERVICING_PROVIDER_NPI AS NPI,
+    'Servicing' AS PROVIDER_ROLE,
+    SUM(m.TOTAL_PAID_AMOUNT) AS TOTAL_PAID_AMOUNT,
+    p.ENTITY_TYPE_CODE
+FROM MODEL.FACT_MEDICAID_PROVIDER_SPENDING m
+LEFT JOIN MODEL.PROVIDER_DIM p
+    ON m.SERVICING_PROVIDER_NPI = p.NPI
+WHERE m.TOTAL_PAID_AMOUNT > 0
+  AND p.NPI IS NOT NULL
+  AND p.ENTITY_TYPE_CODE IN (1, 2)
+GROUP BY
+    m.SERVICING_PROVIDER_NPI,
+    p.ENTITY_TYPE_CODE;
+```
+
+Output Grain
+1 row per NPI per Provider Role
+
+Example:
+NPI 1234567890 — Billing
+NPI 1234567890 — Servicing
+
+### 8.4 Provider Role Percentile Table
+This table computes percentile rankings for each provider role based on total paid amounts.
+
+Table: `MODEL.PROVIDER_ROLE_PERCENTILE`
+```sql
+CREATE OR REPLACE TABLE MODEL.PROVIDER_ROLE_PERCENTILE AS
+SELECT
+    NPI,
+    PROVIDER_ROLE,
+    TOTAL_PAID_AMOUNT,
+    ENTITY_TYPE_CODE,
+    PERCENT_RANK() OVER (
+        PARTITION BY PROVIDER_ROLE
+        ORDER BY TOTAL_PAID_AMOUNT DESC
+    ) AS PAID_AMOUNT_PERCENTILE
+FROM MODEL.PROVIDER_ROLE_PAID_SUMMARY;
+```
+
+Notes
+- Percentiles range from 0 to 1
+- Billing and Servicing percentiles are independent distributions
+- Entity type is preserved for downstream filtering
+
+### 8.5 Downstream Usage
+Power BI Semantic Model
+Top 10 Providers visual uses:
+- provider_dim[NPI] (hidden)
+- provider_dim[provider_display_name]
+- Total Paid Amount (Dynamic) measure
+- Billing/Servicing toggle aligns with PROVIDER_ROLE
+- Percentile KPI uses MODEL.PROVIDER_ROLE_PERCENTILE
+
+Data Quality Benefits
+- Removes ghost NPIs
+- Eliminates DIM‑only providers
+- Ensures percentile accuracy
+- Ensures Top N accuracy
+- Ensures toggle correctness
+
+8.6 Validation
+A validation query is provided to confirm alignment between:
+- FACT totals
+- Summary table
+- Percentile table
+- Power BI visuals
+
+```sql
+SELECT
+    s.NPI,
+    p.provider_display_name,
+    s.PROVIDER_ROLE,
+    s.ENTITY_TYPE_CODE,
+    s.TOTAL_PAID_AMOUNT,
+    pr.PAID_AMOUNT_PERCENTILE
+FROM MODEL.PROVIDER_ROLE_PAID_SUMMARY s
+LEFT JOIN MODEL.PROVIDER_ROLE_PERCENTILE pr
+    ON s.NPI = pr.NPI
+    AND s.PROVIDER_ROLE = pr.PROVIDER_ROLE
+LEFT JOIN MODEL.PROVIDER_DIM p
+    ON s.NPI = p.NPI
+ORDER BY s.TOTAL_PAID_AMOUNT DESC
+LIMIT 200;
+```
+
+---
+## ⭐ 9. Complete SQL File Inventory
 ```code
 | #  | SQL File                           | Pipeline          | Layer      | Type          |
 |----|------------------------------------|-------------------|------------|---------------|
@@ -280,6 +442,7 @@ After all three pipelines complete, validate dimension join coverage:
 | 18 | legacy_servicing_provider_dim.sql  | MODEL (Integrity) | MODEL      | Legacy Servicing DIM |
 | 19 | dq_invalid_npi_trend.sql           | MODEL (Integrity) | MODEL      | Trend Table |
 | 20 | dq_invalid_npi_anomalies.sql       | MODEL (Integrity) | MODEL      | Anomaly Detection |
+| 21 | provider_role_percentile.sql       | MODEL (Integrity) | MODEL      | Percentile Rankings per provider role |
 ```
 
 
