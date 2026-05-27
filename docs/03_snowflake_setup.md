@@ -136,3 +136,136 @@ Therefore:
 - NPI Registry files are uploaded to @NPI_EXTRACTED
 
 This is the supported and scalable ingestion pattern.
+
+🟦 9. Troubleshooting: Power BI ↔ Snowflake (Key‑Pair Authentication)
+This section documents common issues encountered when connecting Power BI Desktop to Snowflake using RSA key‑pair authentication, along with verified fixes.
+It is designed for reuse across client implementations and internal onboarding.
+
+9.1 Common Connection Errors
+| **Error / Symptom**                     | **Cause**                          | **Resolution** |
+| --------------------------------------- | ---------------------------------- | -------------------------------------------- |
+| SSL peer certificate or                 | Incorrect **Snowflake server URL** | Use the exact account URL:                   |
+  SSH remote key was not OK               | (using org name or browser URL     | ``<ACCOUNT_LOCATOR>.snowflakecomputing.com`` |
+  (code=60)                               | instead of account locator)        |                                              |
+| ____________________________________    | _________________________________  |  __________________________________________  |     
+| Power BI shows only Username /          | Wrong connector (OAuth popup       |  Use **Get Data → Snowflake** (native        |
+| Password (no Key‑Pair option)           | instead of native connector)       |  connector), not the browser login           |
+|                                         |                                    |                                              |
+| ____________________________________    | _________________________________  |  __________________________________________  |   
+| openssl: command not found              | OpenSSL not installed or PATH not  |  Install **Win64 OpenSSL v3.x Light** and add|
+|                                         | updated                            |  C:\\ProgramFiles\\OpenSSL-Win64\\bin to PATH|
+| ____________________________________    | _________________________________  |  __________________________________________  |   
+| Key‑pair authentication fails           | Public key not registered or       | Re‑run ALTER USER ... SET                    |
+| immediately                             | mismatched                         | RSA_PUBLIC_KEY = '<public ``key>'            |
+| ____________________________________    | _________________________________  |  __________________________________________  |   
+| Power BI rejects pasted private key     | Missing header/footer line breaks  | Ensure full block is included: -----BEGIN    | 
+|                                         |                                    | PRIVATE KEY----- … -----END PRIVATE KEY----- |
+| ____________________________________    | _________________________________  |  __________________________________________  |   
+| Power BI cannot find the private key    | File generated in unexpected       |  Search with:                                |
+| file                                    |  directory                         |  Get-ChildItem "-Path C:\\"-Filter rsa_key.p8|
+|                                         |                                    |  -Recurse                                    |
+
+
+9.2 Verifying the Correct Snowflake Server URL
+Power BI must use the organization URL.
+
+9.3 OpenSSL Installation Issues
+Symptom
+```code
+openssl : The term 'openssl' is not recognized...
+```
+
+Fix
+- Install Win64 OpenSSL v3.x Light (not v4.x experimental).
+- Add to PATH: `C:\Program Files\OpenSSL-Win64\bin`
+- Restart PowerShell.
+- Verify:
+```powershell
+openssl version
+```
+
+9.4 Public vs Private Key Confusion
+| **Key**     | **File**        | **Used By** | **Notes**                                               |
+| ----------  | --------------- | ----------- | ------------------------------------------------------- |
+| Public Key  | ``rsa_key.pub`` | Snowflake   | Added via ``ALTER ``USER ``... ``SET ``RSA_PUBLIC_KEY`` |
+| Private Key | ``rsa_key.p8``  | Power BI    | Never shared; selected or pasted during authentication  |
+
+*Important*:  
+Power BI uses the private key.
+Snowflake stores the public key.
+
+9.5 Connector UI Differences
+Power BI has two Snowflake authentication UIs:
+
+A. Native Power BI Desktop Connector (recommended)
+- Accessed via Get Data → Snowflake
+- Supports file picker for rsa_key.p8
+- Most stable for enterprise deployments
+
+B. Browser‑style OAuth Popup
+- Appears when Power BI triggers OAuth flow
+- Shows a textbox for private key instead of file picker
+- Requires pasting the full private key text
+
+Use the native connector whenever possible.
+
+🟦 10. Step‑by‑Step Guide: Power BI ↔ Snowflake (Key‑Pair Authentication)
+This guide provides a repeatable, client‑ready workflow for secure Power BI connectivity.
+
+10.1 Generate RSA Key Pair (Client Machine)
+```powershell
+# Private key (PKCS#8)
+openssl genrsa -out rsa_key.p8 2048
+
+# Public key
+openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
+```
+Files created:
+> rsa_key.p8 → private key (Power BI)
+> rsa_key.pub → public key (Snowflake)
+
+10.2 Register Public Key in Snowflake
+```sql
+alter user PBI_USER
+  set rsa_public_key = '-----BEGIN PUBLIC KEY-----
+<contents of rsa_key.pub>
+-----END PUBLIC KEY-----';
+```
+Verify:
+```sql
+describe user PBI_USER;
+```
+
+10.3 Determine Correct Server URL
+On your snowflake account details, copy Account/Server URL.
+
+10.4 Connect from Power BI Desktop
+Step 1 — Get Data → Snowflake
+Step 2 — Enter connection details
+```sql
+Server: "<your-organization-name>"-"<your-account-name>".snowflakecomputing.com
+Warehouse:"<your-warehouse-name>"
+```
+
+Step 3 — Authentication
+Choose:
+```code
+Key-pair
+```
+
+Step 4 — Provide credentials
+- Username: `PBI_USER`
+
+- Private Key:
+Use Browse… to select rsa_key.p8
+OR paste the full private key block (browser-style UI)
+
+- Passphrase: leave blank (unless encrypted)
+
+Step 5 — Connect
+Power BI will display the Snowflake Navigator with:
+```code
+ANALYTICS_MEDICAID.MODEL
+STAGE_MEDICAID.CLEAN
+RAW_MEDICAID.PUBLIC
+```
