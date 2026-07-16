@@ -9,6 +9,11 @@ Snowflake + Power BI | 238M‑row Healthcare Analytics Pipeline
 
 ## 📘 Project Overview
 Medicaid Claims Analytics is a full end‑to‑end healthcare analytics project that ingests, cleans, models, and visualizes large‑scale public healthcare datasets.
+
+<p align="center">
+  <img src="assets/dashboard_screenshots/01_ExecutiveDashboard.png" alt="Executive Dashboard" width="850">
+</p>
+
 The solution integrates three federal sources:
 - Medicaid Provider Spending (238M rows)
 - HCPCS Level II (procedure metadata)
