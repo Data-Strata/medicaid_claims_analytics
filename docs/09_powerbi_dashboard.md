@@ -911,6 +911,7 @@ Usage in Power BI
 | 1.0     | 2026‑04‑05 | Mairilyn | Initial dashboard design + DAX guidelines |
 | 1.1     | 2026‑05‑19 | Mairilyn | Added Data Completeness KPI, Full‑Month Filtering logic, and updated Paid Amount Trend to exclude incomplete months |
 | 1.2     | 2026‑05‑22 | Mairilyn | Added Provider_Role_Percentile and relationship to Provider_DIM|
+| 2.0     | 2026‑07‑10 | Mairilyn | Added completed documenantation of the 5 main dashboards in Power BI|
 
 ---
 
