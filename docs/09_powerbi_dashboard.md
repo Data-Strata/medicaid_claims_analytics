@@ -439,8 +439,9 @@ Trend visuals automatically exclude incomplete months using the Paid Amount (Ful
 
 These rules ensure a predictable, transparent user experience across the entire dashboard.
 
-⭐ Executive Narrative 
-The Executive Overview page tells a clear, data‑driven story of Medicaid spending. It begins with a KPI row that quantifies the scale of the program—total paid amount, claims volume, patient reach, and provider participation. The trend visual contextualizes how spending has evolved over time, highlighting peaks, troughs, and structural shifts in utilization. The service category donut breaks down spend across OP, RX, and OTHER categories, revealing where Medicaid dollars are concentrated. The geographic map surfaces state‑level variation in spending, while the Top 10 Providers visuals identify the largest organizational and individual contributors to Medicaid costs. Together, these elements provide leadership with a comprehensive, at‑a‑glance understanding of program performance and emerging patterns.
+### ⭐ Executive Narrative 
+The Executive Overview page tells a clear, data‑driven story of Medicaid spending. It begins with a KPI row that quantifies the scale of the program—total paid amount, claims volume, patient reach, and provider participation. The trend visual contextualizes how spending has evolved over time, highlighting peaks, troughs, and structural shifts in utilization. The service category donut breaks down spend across OP, RX, and OTHER categories, revealing where Medicaid dollars are concentrated. The geographic map surfaces state‑level variation in spending, while the Top 10 Providers visuals identify the largest organizational and individual contributors to Medicaid costs. 
+Together, these elements provide leadership with a comprehensive, at‑a‑glance understanding of program performance and emerging patterns.
 
 ---
 
@@ -473,7 +474,7 @@ This page highlights your provider‑level enrichment, risk scoring, and integri
 - Scorecard = Who should we investigate?
 - Drillthrough = What is happening with this provider?
 
-> Key Visuals & Components
+**Key Visuals & Components**
 1. Provider Search (NPI / Name)
 Users can directly search for any provider using:
 - NPI
@@ -591,7 +592,7 @@ How it works
 ---
 
 📘 12.3 Page 3 — Provider Drillthrough (High‑Detail Provider Profile)
-Purpose: Provide a deep‑dive diagnostic profile for a single provider selected from the Top 10 Organizations or Top 10 Individuals tables on the Executive Overview page.
+**Purpose**: Provide a deep‑dive diagnostic profile for a single provider selected from the Top 10 Organizations or Top 10 Individuals tables on the Executive Overview page.
 This page is not a general provider browser. It is intentionally restricted to high‑impact providers surfaced by the executive‑level Top‑N visuals.
 
 Access Rules
@@ -607,7 +608,7 @@ The drillthrough page answers:
 It provides fact‑level, time‑series, and category‑level insights that cannot be shown on the Scorecard page.
 It is used during investigations, audits, and program integrity reviews.
 
-Key Visuals & Components
+**Key Visuals & Components**
 1. Provider Identity Block
 Displays enriched provider attributes from PROVIDER_DIM:
 - Provider Display Name
@@ -677,34 +678,169 @@ This separation ensures a clean analytical workflow and prevents misuse of the d
 
 ---
 ## 📘 12.4 Page 4 — HCPCS Explorer
-**Purpose:** Drill into procedure‑level utilization and spend.
+**Purpose:**   
+Provide procedure‑level analytics across all HCPCS/CPT codes, enabling deep clinical and financial insight into utilization, spend, category mix, and cost efficiency. This page is the core of the analytics solution, supporting drilldown from service categories into specific procedures.
+
+This page showcases the integration of `HCPCS_DIM` and supports clinical + financial analysis. 
+
+⭐ Analytical Questions Answered
+- What procedures are being billed across Medicaid?
+- How much do these procedures cost?
+- Which HCPCS categories dominate spend?
+- Which codes drive utilization vs spend?
+- How do procedure‑level trends evolve over time?
+- Which codes show unusually high paid‑per‑claim values?
+- How does category mix shift across years?
+- How do Billing vs Servicing provider roles differ?
 
 **Key Visuals**
+1. HCPCS KPIs
 - Distinct HCPCS Count
-- Top HCPCS by Paid Amount
-- HCPCS → Description → Paid Amount matrix
-- Service Category slicer
-- Paid Amount Trend by HCPCS Category
+- Total Paid Amount
+- Total Claims
+- Total Patients
+These KPIs summarize the scope of procedure‑level activity and respond to all slicers (date, state, category, role).
 
-This page showcases the integration of `HCPCS_DIM` and supports clinical + financial analysis. It answers the questions: 
-- What services are being billed?
-- How much they cost?
-- How they trend over time?
-- Which categories dominate?
-- Which HCPCS codes drive spend?
+2. Top 10 HCPCS Categories by Paid Amount
+A bar chart ranking categories using a dynamic Top N DAX measure that respects slicers and role‑aware logic.
+Shows which categories dominate spend (e.g., State Medicaid Codes, CPT, Behavioral Health, DME/Supplies).
+
+3. Paid Amount Trend (Category-Level)
+A multi‑series line chart showing paid amount over time for each HCPCS category.
+Reveals:
+- Category growth or decline
+- COVID‑era spikes
+- Seasonal patterns
+- Category mix stability
+
+4. HCPCS Detail Matrix — Paid, Claims & Patients by Code
+A procedure‑level matrix showing:
+- HCPCS Code
+- Description
+- Category
+- Paid Amount (role‑aware)
+- Claims (role‑aware)
+- Patients (role‑aware)
+- Paid per Claim (efficiency metric)
+
+Includes conditional formatting and a legend explaining each metric:
+- Paid Amount: Total Medicaid spend
+- Claims: Utilization volume
+- Patients: Patient reach
+- Paid per Claim: Cost efficiency indicator
+- Category: Expanded taxonomy (CPT, HCPCS Level II, PLA, State Medicaid, DME, Drugs, Radiology, Lab, Behavioral Health, etc.)
+
+This matrix is the analytical engine of the page.
+
+5. Service Category Slicer
+Allows filtering HCPCS codes by OP / RX / OTHER categories derived from Page 5 logic.
+Creates a bridge between category‑level and procedure‑level analysis.
+
+⭐ Key Behaviors
+### Role‑Aware Measures
+All visuals respond to the Billing vs Servicing toggle using `USERELATIONSHIP`, ensuring accurate provider‑role analysis.
+
+### Filter‑Aware Ranking
+Top N logic uses `ALLSELECTED()` to ensure categories remain visible even when filtered.
+
+### Expanded HCPCS Taxonomy
+Categories are derived from:
+- CPT
+- CPT-II
+- CPT-III
+- PLA
+- HCPCS Level II
+- DME
+- Drugs
+- Radiology
+- Lab
+- Behavioral Health
+- State Medicaid Codes
+- Temporary Codes
+- Commercial Payer Codes
+- Vision/Hearing
+- Orthotics/Prosthetics
+- Enteral/Parenteral
+- Invalid Codes
+- Modifiers
+This taxonomy powers category‑level insights.
+
+Full-Month Trend Logic
+Trend visuals use a “full months only” measure to avoid partial-month distortion.
+
+⭐ Drillthrough Integration (Optional Enhancement)
+A drillthrough from Page 5 → Page 4 is not yet implemented.  
+However, Page 4 is designed to be the ideal destination for future drillthrough from Service Category Analytics.
+
+If implemented, drillthrough would allow users to click OP, RX, or OTHER on Page 5 and open Page 4 automatically filtered to:
+- Selected service category
+- Selected date range
+- Selected state
+- Selected provider role
+
+This would create a seamless workflow: Service Category → HCPCS Explorer → Provider Detail (future)
+
+### ⭐ Analytic Insights Enabled by Page 4
+- Identify high‑spend HCPCS codes
+- Detect outliers via paid‑per‑claim
+- Understand category mix at procedure level
+- Analyze utilization vs spend patterns
+- Reveal high‑reach procedures (large patient counts)
+- Compare Billing vs Servicing provider behavior
+- Track category‑level trends over time
+- Support clinical + financial decision‑making
 
 ---
 
 ## 📘 12.5 Page 5 — Service Category Analytics
-**Purpose:** Understand utilization and spend across OP / RX / OTHER categories.
+**Purpose:** Provide a high‑level view of Medicaid utilization and spend across the three derived service categories — OP, RX, and OTHER — enabling executives and analysts to understand category mix, cost distribution, efficiency, and trends.
 
 **Key Visuals**
-- Donut: OP vs RX vs OTHER
-- Trend: Paid Amount by Category over Time
-- Category Table: Claims, Paid Amount, Patients
-- Category‑specific KPIs
+- Category KPIs: Paid Amount, Claims, Patients for OP / RX / OTHER
+- Donut Chart: Spend mix across service categories
+- Paid Amount Trend: Category-level spend over time
+- Paid per Claim Trend: Cost efficiency trend by category
+- Scatter Plot: Claims vs Paid Amount (category positioning)
+- Category Services Detail Matrix: Paid, Claims, Patients, Paid per Claim
+- Category Notes Legend: Definitions of OP, RX, OTHER
 
-This page highlights the derived `SERVICE_CATEGORY` logic and category‑level insights.
+Analytical Questions Answered:
+- How does spend distribute across OP, RX, and OTHER?
+- Which categories drive utilization vs cost?
+- How do category trends evolve over time?
+- Which categories show cost inflation or efficiency changes?
+- How do claims, paid amounts, and patient reach differ by category?
+
+Key Behaviors:
+- Fully role‑aware (Billing vs Servicing toggle)
+- Fully filter‑aware (Date, State)
+- Uses derived SERVICE_CATEGORY logic
+- Supports drillthrough to Page 4 (HCPCS Explorer) for deeper analysis
+
+Drillthrough Integration:  
+- Each category (OP, RX, OTHER) can be clicked to open Page 4 — HCPCS Explorer, automatically filtered to:
+- The selected service category
+- The selected date range
+- The selected role (Billing/Servicing)
+- The selected state
+
+Derived Logic: 
+`SERVICE_CATEGORY` is computed:
+- OP = POS codes + HCPCS patterns
+- RX = J‑codes
+- OTHER = everything else
+
+Interpretation Notes
+- RX = medical benefit drugs (J‑codes), not pharmacy NDC
+- OP = high‑volume, moderate‑cost
+- OTHER = heterogeneous, high‑cost
+
+### Analytic Insights 
+- OTHER dominates spend
+- OP dominates utilization
+- RX is high‑volume but low‑cost
+- Paid per claim reveals efficiency differences
+- Category mix is stable over time
 
 ---
 
