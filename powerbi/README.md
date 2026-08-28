@@ -87,34 +87,31 @@ docs/11_s2t_mapping.md (source‑to‑target lineage)
 Everything required to reproduce the dashboard is included in this repo.
 
 ## 🖼 Dashboard Screenshots
-Below are the screenshots included in this folder:
+Below are the screenshots included in **assets/dashboard_screenshots** :
 
 1. Executive Overview
-assets/dashboard_screenshots/01_ExecutiveDashboard.png
-<img src="assets/dashboard_screenshots/01_ExecutiveDashboard.png" width="850">
-<img src="assets/dashboard_screenshots/01_ExecutiveDrillMap2.png" width="850">
-<img src="assets/dashboard_screenshots/01_ExecutiveDrillMap3.png" width="850">
 
+assets/dashboard_screenshots/01_ExecutiveDashboard.png
 
 2. Provider Integrity Scorecard
+
 assets/dashboard_screenshots/02_ProviderScorecard.png
-<img src="assets/dashboard_screenshots/02_ProviderScorecard.png" width="850">
 
 3. Provider Drillthrough
+
 assets/dashboard_screenshots/03_ProviderIntegrity.png
-<img src="assets/dashboard_screenshots/03_ProviderIntegrity.png" width="850">
 
 4. HCPCS Explorer
+
 assets/dashboard_screenshots/04_HCPCS_Explorer.png
-<img src="assets/dashboard_screenshots/04_HCPCS_Explorer.png" width="850">
 
 5. Service Category Analytics
+
 assets/dashboard_screenshots/05_ServiceCategoryAnalytics.png
-<img src="assets/dashboard_screenshots/05_ServiceCategoryAnalytics.png" width="850">
 
 6. Data Quality & Lineage
+
 assets/dashboard_screenshots/06_DQ&Lineage.png
-<img src="assets/dashboard_screenshots/06_DQ&Lineage.png" width="850">
 
 ## 📬 Contact
 For questions or collaboration, feel free to open an issue or reach out.
