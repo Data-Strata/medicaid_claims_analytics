@@ -10,17 +10,40 @@ Snowflake + Power BI | 238M‑row Healthcare Analytics Pipeline
 ## 📘 Project Overview
 Medicaid Claims Analytics is a full end‑to‑end healthcare analytics project that ingests, cleans, models, and visualizes large‑scale public healthcare datasets.
 
-<p align="center">
-  <img src="assets/dashboard_screenshots/01_ExecutiveDashboard.png" alt="Executive Dashboard" width="850">
-</p>
-
-
 The solution integrates three federal sources:
 - Medicaid Provider Spending (238M rows)
 - HCPCS Level II (procedure metadata)
 - NPPES NPI Registry (330‑column provider master file)
 
 All data flows through a clean RAW → STAGE → MODEL → INTEGRITY → BI architecture built in Snowflake and visualized in Power BI.
+
+## 🖼 Dashboard Gallery
+
+### 1. Executive Overview
+
+<img src="assets/dashboard_screenshots/01_ExecutiveDashboard.png" width="850">
+
+
+### 2. Provider Integrity Scorecard
+
+<img src="assets/dashboard_screenshots/02_ProviderScorecard.png" width="850">
+
+### 3. Provider Drillthrough
+   
+<img src="assets/dashboard_screenshots/03_ProviderIntegrity.png" width="850">
+
+### 4. HCPCS Explorer
+
+<img src="assets/dashboard_screenshots/04_HCPCS_Explorer.png" width="850">
+
+### 5. Service Category Analytics
+   
+<img src="assets/dashboard_screenshots/05_ServiceCategoryAnalytics.png" width="850">
+
+### 6. Data Quality & Lineage
+   
+<img src="assets/dashboard_screenshots/06_DQ&Lineage.png" width="850">
+
 
 ## 📁 Project Structure & Documentation Index
 
@@ -93,7 +116,7 @@ medicaid_claims_analytics/
 │   └── README.md   # Dataset overview + source link
 │
 ├── powerbi/
-│   └── dashboard.pbix                 
+│   └── README.md                 
 │
 └── assets/
     ├── architecture_diagram.png
