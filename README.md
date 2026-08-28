@@ -14,25 +14,13 @@ Medicaid Claims Analytics is a full end‑to‑end healthcare analytics project 
   <img src="assets/dashboard_screenshots/01_ExecutiveDashboard.png" alt="Executive Dashboard" width="850">
 </p>
 
+
 The solution integrates three federal sources:
 - Medicaid Provider Spending (238M rows)
 - HCPCS Level II (procedure metadata)
 - NPPES NPI Registry (330‑column provider master file)
 
 All data flows through a clean RAW → STAGE → MODEL → INTEGRITY → BI architecture built in Snowflake and visualized in Power BI.
-
-## 🚀 Project Status
-```markup
-| Phase                         | Status          |
-| ----------------------------- | --------------- |
-| RAW ingestion (3 datasets)    | ✅ Complete    |
-| STAGE layer (cleaned + typed) | ✅ Complete |
-| MODEL layer (DIM + FACT)      | ✅ Complete |
-| Provider Integrity Framework  | ✅ Complete |
-| BI semantic model             | 🟨 In Progress |
-| Power BI dashboard            | 🟨 In Progress |
-| Analytics & insights          | 🔲 Planned |
-```
 
 ## 📁 Project Structure & Documentation Index
 
@@ -324,22 +312,71 @@ The Medicaid Provider Spending dashboard is organized into **six pages**, each a
    Executive summary of spend, utilization, and geographic distribution.
 
 2. **Provider Integrity Scorecard**  
-   Provider‑level risk scoring, performance metrics, and billing vs servicing analysis.
+   - Provider‑level risk scoring, performance metrics, and billing vs servicing analysis.
 
-3. **HCPCS Explorer**  
+   The Provider Integrity Scorecard provides a benchmarking‑oriented view of Medicaid providers, enabling program integrity teams to identify high‑risk, high‑volume, or atypical providers based on percentile‑driven metrics. By leveraging the enriched provider dimension and role‑aware percentile distributions, the scorecard highlights outlier behavior in paid amounts, claims volume, and patient panel size. This page serves as the primary tool for triaging providers that may warrant further investigation, with the drillthrough page offering a deeper, fact‑level analysis when needed.
+
+3. **Provider Drillthrough** (High‑Detail Provider Profile)
+  - Provide a deep‑dive diagnostic profile for a single provider selected from the Top 10 Organizations or Top 10 Individuals tables on the Executive Overview page. This page is not a general provider browser. It is intentionally restricted to high‑impact providers surfaced by the executive‑level Top‑N visuals.
+  > Access Rules
+  - This page is only accessible via drillthrough from: Top 10 Organizations (Page 1) & Top 10 Individuals (Page 1)
+  This design ensures the drillthrough is used for targeted investigation, while broader provider benchmarking is handled by the Provider Integrity Scorecard (Page 2).   
+
+4. **HCPCS Explorer**  
    Procedure‑level utilization and spend using the HCPCS dimension.
 
-4. **Service Category Analytics**  
+5. **Service Category Analytics**  
    OP / RX / OTHER category insights and trends.
 
-5. **Data Quality & Anomaly Detection**  
-   Invalid NPI trends, anomaly flags, quarantine counts, and pipeline health.
-
-6. **Documentation & Lineage**  
-   Star schema, data sources, DAX conventions, and versioning.
+6. **Data Quality & Lineage**  
+   Invalid NPI trends, anomaly flags, star schema, versioning, roadmap and technical recommendations.
 
 This structure provides a complete narrative:  
-**Overview → Provider Integrity → Clinical Utilization → Category Insights → Data Quality → Documentation.**
+**Overview → Provider Integrity → Clinical Utilization → Category Insights → Data Quality & Documentation.**
+
+
+## ⭐ Project Insights & Recommendations
+
+This project demonstrates how data quality signals, semantic modeling, and lineage documentation can be combined to reveal meaningful operational behavior across a large‑scale Medicaid analytics pipeline. 
+The Invalid NPI Trend and Anomaly Flags visuals highlight a clear historical pattern: invalid‑claim volumes were extremely high from 2018–2020, followed by a dramatic improvement beginning in 2021. This shift suggests upstream corrections, stricter provider validation, or system‑level changes that stabilized NPI quality. 
+The DQ Severity Score benchmarks invalid‑claim volume against a governance threshold, providing a simple, interpretable indicator of pipeline health.
+
+The consolidated Data Quality & Lineage page makes the dashboard self‑contained by pairing DQ metrics with architectural context. It explains how NPI validation, anomaly detection, and business rules are applied in the Snowflake MODEL layer, and how the STAR schema supports downstream analytics. This transparency helps reviewers understand not only what the dashboard shows, but how the underlying data is governed, validated, and transformed.
+
+Recommendations & Future Enhancements
+To expand the project’s governance capabilities and analytical depth, the following enhancements are recommended:
+
+Data Quality Enhancements
+- Add provider‑level DQ metrics to identify recurring offenders.
+- Introduce STAGE‑level quarantine logs (invalid HCPCS, missing fields, referential failures).
+- Implement incident tracking with timestamps, severity, and resolution status.
+- Add anomaly scoring using Z‑score or MAD for more sensitive detection.
+- Expand DQ rules beyond NPIs (HCPCS, dates, state codes, taxonomy mismatches).
+
+Pipeline & Modeling Enhancements
+- Add drillthrough from category → HCPCS → provider detail.
+- Introduce forecasting (ARIMA/Prophet) for category‑level spend and utilization.
+- Add DQ SLA compliance metrics for ingestion timeliness and validation coverage.
+- Expand STAR schema with additional dimensions (Facility, Claim Type).
+- Add a composite DQ Health Score combining multiple DQ signals.
+
+Documentation Enhancements
+- Expand the change log for schema updates, rule changes, and dashboard enhancements.
+
+
+
+## 🚀 Project Status
+```markup
+| Phase                         | Status          |
+| ----------------------------- | --------------- |
+| RAW ingestion (3 datasets)    | ✅ Complete    |
+| STAGE layer (cleaned + typed) | ✅ Complete |
+| MODEL layer (DIM + FACT)      | ✅ Complete |
+| Provider Integrity Framework  | ✅ Complete |
+| BI semantic model             | ✅ Complete |
+| Power BI dashboard            | ✅ Complete |
+| Analytics & insights          | ✅ Complete |
+```
 
 ## 🎯 What This Project Demonstrates
 - Real‑world ingestion of multi‑GB healthcare datasets
@@ -369,5 +406,5 @@ For questions or collaboration, feel free to open an issue or reach out.
 Healthcare Data Analytics | Snowflake + SQL Server + Power BI + Excel
 🏖️ Boca Raton, FL
 🌐 https://github.com/Data-Strata
-📧 mairilynyera@gmail.com
+📧 mairilynyera@data-strata.io
 💼 LinkedIn: www.linkedin.com/in/mairilyn-yera-galindo-07a93932
