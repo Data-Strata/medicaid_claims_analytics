@@ -1,4 +1,4 @@
-📄 15 — DATE_DIM & SERVICE_CATEGORY_DIM (MODEL Layer)
+📄 14 — DATE_DIM & SERVICE_CATEGORY_DIM (MODEL Layer)
 # Medicaid Claims Analytics — Snowflake Data Warehouse
 
 This document describes the two semantic dimensions created in the MODEL layer to support Power BI analytics:
