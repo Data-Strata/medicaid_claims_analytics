@@ -1,4 +1,4 @@
-📄 13_geographic_standardization.md
+📄 12_geographic_standardization.md
 ## U.S. State Standardization for NPI_DIM (MODEL Layer)
 
 ## 🟦 Overview
