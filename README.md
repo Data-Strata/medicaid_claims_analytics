@@ -140,7 +140,7 @@ medicaid_claims_analytics/
 
 - **Provider Integrity Framework (Scorecard + Registry + Anomalies)**  
   `docs/16_provider_integrity_scorecard.md`  
-  `docs/17_legacy_servicing_provider_registry.md`
+  `docs/17_legacy_servicing_provider_registry.md`<br>
   `docs/18_dq_dashboard_spec.md`                        
   `docs/19_dq_anomaly_detection.md`
  
