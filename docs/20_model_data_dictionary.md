@@ -1,5 +1,4 @@
 📘 MODEL Layer Data Dictionary
-File: docs/21_model_data_dictionary.md  
 Purpose: Central reference for all MODEL‑layer tables used in analytics, integrity scoring, and Power BI semantic modeling.
 
 🟦 1. NPI_DIM(Provider Dimension) 
