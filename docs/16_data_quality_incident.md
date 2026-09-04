@@ -3,8 +3,6 @@ Contains narrative, diagnostics, root cause, remediation, validation, and append
 
 ## Medicaid Provider Spending Data Quality Incident — Technical Analysis & Resolution
 Date: May 2026
-Prepared by: Data Engineering – Medicaid Analytics
-Author: Mairilyn
 
 ### 1. Executive Summary
 In April–May 2026, a data integrity issue was identified in the Medicaid Provider Spending dataset for calendar year 2018. 
