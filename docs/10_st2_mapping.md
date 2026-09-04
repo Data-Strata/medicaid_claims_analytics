@@ -1037,15 +1037,11 @@ This is why S2T documentation is a **non-negotiable requirement** in EDS, Medica
 |---------|------------|------------------|-----------------------------------------------------------------------------------------|
 | **1.0** | 2026-05-03 | Mairilyn Yera    | Initial S2T mapping created for NPI_DIM, HCPCS_DIM, and FACT_MEDICAID_PROVIDER_SPENDING |
 | **1.1** | 2026-05-03 | Mairilyn Yera    | Added DATE_DIM and SERVICE_CATEGORY_DIM mappings                                        |
-| **2.0** | 2026-05-06 | Mairilyn Yera    | Comprehensive update: expanded all table mappings with detailed RAW→STAGE→MODEL lineage, added STAGE layer field mappings, documented all derived fields,
-                                          | added SERVICE_CATEGORY logic, enhanced geographic standardization section, added complete transformation logic summary, expanded join relationships section, 
-                                          | added Power BI usage guidance |
+| **2.0** | 2026-05-06 | Mairilyn Yera    | Comprehensive update: expanded all table mappings with detailed RAW→STAGE→MODEL lineage, added STAGE layer field mappings, documented all derived fields,|added SERVICE_CATEGORY logic, enhanced geographic standardization section, added complete transformation logic summary, expanded join relationships section, added Power BI usage guidance |
 | **2.1** | 2026-05-07 | Mairilyn Yera    | Corrected Full_Name construction, added Provider_Display_Name, Provider_Type and Data_Quality_Flag
 | **2.2** | 2026-05-10 | Mairilyn Yera    | Added section 10 on mapping for the Medicaid Provider Spending pipeline and updated section 11 to include 2 new Fact tables
 | **2.3** | 2026-05-15 | Mairilyn Yera    | Updated Model Layer, added Integrity Layer, introduced Provider_DIM as a cleaned streamline NPI dimesion table and Drop Fact tables
 | **2.4** | 2026-05-22 | Mairilyn Yera    | Added Provider_Role_Percentile to Model Layer
-
-
 
 **Note**: All changes follow semantic versioning and include brief descriptions of modifications.
 
