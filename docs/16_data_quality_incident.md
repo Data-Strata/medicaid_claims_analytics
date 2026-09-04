@@ -136,9 +136,5 @@ Any malformed rows are moved to a quarantine table for review
 
 
 ### Appendix A — sql/data_incident/isolatingoutliersfact_table.sql
-(Full diagnostic suite — unchanged from your version)  
-✔ Included exactly as provided.
 
 ### Appendix B — sql/data_incident/removeoutliersfact_table.sql
-(Full remediation script — updated and validated)  
-✔ Included exactly as provided.
