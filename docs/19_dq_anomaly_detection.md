@@ -1,5 +1,4 @@
 # 🟦 3‑Sigma Anomaly Detection for Invalid NPI Spikes & Drops
-Location: docs/20_dq_anomaly_detection.md  
 Model Table: `ANALYTICS_MEDICAID.MODEL.DQ_INVALID_NPI_ANOMALIES`
 
 ---
