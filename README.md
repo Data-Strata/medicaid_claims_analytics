@@ -64,18 +64,17 @@ medicaid_claims_analytics/
 │   ├── 07_data_modeling.md                       # Star schema + DIM/FACT design + clustering
 │   ├── 08_etl_pipeline.md                        # Pipeline orchestration + execution order
 │   ├── 09_powerbi_dashboard.md                   # Dashboard design + DAX 
-│   ├── 10_results_and_insights.md                # Findings + analytics summary
-│   ├── 11_s2t_mapping.md                         # Source‑to‑Target lineage (updated with geographic standardization)
-│   ├── 12_NPI_data_quality_analysis.md           # Technical appendix on unmatched NPI categories & anomaly tables|
-│   ├── 13_geographic_standardization.md          # PRACTICE_STATE/MAILING_STATE cleanup + STATE_REF logic  
-│   ├── 14_Medicaid_data_glossary.md              # Medicaid data glossary
-│   ├── 15_date_and_service_dimensions.md         # DATE_DIM + SERVICE_CATEGORY_DIM documentation   
-│   ├── 16_data_quality_incident.md               # data incident & integrity documentation 
-│   ├── 17_provider_integrity_scorecard.md        # Executive-ready scorecard summarizing invalid NPI rates, legacy IDs, and provider integrity KPIs 
-│   ├── 18_legacy_servicing_provider_registry.md  # Registry of A-/M-prefix and non‑NPI servicing IDs with categories and claim volume
-│   ├── 19_dq_dashboard_spec                      # Power BI specification for DQ trend, anomaly detection, and provider integrity visuals
-│   ├── 20_dq_anomaly_detection.md                # Documentation of 3‑sigma anomaly logic for invalid NPI spikes/drops
-│   └── 21_model_data_dictionary.md               # Full data dictionary for all MODEL-layer tables
+│   ├── 10_s2t_mapping.md                         # Source‑to‑Target lineage (updated with geographic standardization)
+│   ├── 11_NPI_data_quality_analysis.md           # Technical appendix on unmatched NPI categories & anomaly tables|
+│   ├── 12_geographic_standardization.md          # PRACTICE_STATE/MAILING_STATE cleanup + STATE_REF logic  
+│   ├── 13_Medicaid_data_glossary.md              # Medicaid data glossary
+│   ├── 14_date_and_service_dimensions.md         # DATE_DIM + SERVICE_CATEGORY_DIM documentation   
+│   ├── 15_data_quality_incident.md               # data incident & integrity documentation 
+│   ├── 16_provider_integrity_scorecard.md        # Executive-ready scorecard summarizing invalid NPI rates, legacy IDs, and provider integrity KPIs 
+│   ├── 17_legacy_servicing_provider_registry.md  # Registry of A-/M-prefix and non‑NPI servicing IDs with categories and claim volume
+│   ├── 18_dq_dashboard_spec.md                   # Power BI specification for DQ trend, anomaly detection, and provider integrity visuals
+│   ├── 19_dq_anomaly_detection.md                # Documentation of 3‑sigma anomaly logic for invalid NPI spikes/drops
+│   └── 20_model_data_dictionary.md               # Full data dictionary for all MODEL-layer tables
 │
 ├── sql/
 │   ├── ── Medicaid Pipeline ──────────────────────────
@@ -140,9 +139,10 @@ medicaid_claims_analytics/
   `docs/11_s2t_mapping.md`
 
 - **Provider Integrity Framework (Scorecard + Registry + Anomalies)**  
-  `docs/17_provider_integrity_scorecard.md`  
-  `docs/18_legacy_servicing_provider_registry.md`  
-  `docs/21_dq_anomaly_detection.md`
+  `docs/16_provider_integrity_scorecard.md`  
+  `docs/17_legacy_servicing_provider_registry.md`
+  `docs/18_dq_dashboard_spec.md`                        
+  `docs/19_dq_anomaly_detection.md`
  
 
 ## 🧭 Architecture Overview
