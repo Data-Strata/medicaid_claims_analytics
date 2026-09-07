@@ -373,7 +373,6 @@ Data Quality Enhancements
 - Add provider‑level DQ metrics to identify recurring offenders.
 - Introduce STAGE‑level quarantine logs (invalid HCPCS, missing fields, referential failures).
 - Implement incident tracking with timestamps, severity, and resolution status.
-- Add anomaly scoring using Z‑score or MAD for more sensitive detection.
 - Expand DQ rules beyond NPIs (HCPCS, dates, state codes, taxonomy mismatches).
 
 Pipeline & Modeling Enhancements
