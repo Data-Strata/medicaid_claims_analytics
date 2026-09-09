@@ -396,16 +396,26 @@ Behavior:
 - If user selects Servicing, returns Servicing percentile
 - Works on drillthrough
 
+
+# 12. 🟦 HCPCS Taxonomy Mapping (Power BI Layer)
+
+This document describes the logic used to classify every HCPCS code appearing in the fact table into a human-readable category, for use in category-level analytics and the Data Quality & Lineage dashboard page. 
+
+Model Tables: `HCPCS_BASE`, `HCPCS_SUPPLEMENTAL_MAP`, `HCPCS_SUPPLEMENTAL_MAP_ENRICHED`, `HCPCS_FULL_DIM`
+Calculated Column: `HCPCS_DIM[HCPCS Category]`
+
+See full documentation in `docs\21_hcpcs_taxonomy_mapping.md`
+
 ---
 
-# 12. Dashboard Pages (Updated)
+# 13. Dashboard Pages
 
-The Medicaid Provider Spending dashboard is organized into **six pages**, each serving a distinct analytical purpose. 
+The Medicaid Provider Spending dashboard is organized into **five pages**, each serving a distinct analytical purpose, plus **two pages** for Data Quality and Documentation Overview. .  
 The layout follows a logical narrative: executive overview → provider integrity → clinical utilization → category insights → data quality → documentation.
 
 ---
 
-## 📘 12.1 Page 1 — Medicaid Spending Overview
+## 📘 13.1 Page 1 — Medicaid Spending Overview
 
 ⭐The Executive Overview page provides a high‑level assessment of Medicaid program performance, highlighting total spend, utilization volume, patient reach, and provider participation across the United States. The combination of KPIs, trend analysis, service category distribution, and geographic spend patterns enables leadership to quickly identify macro‑level shifts in Medicaid spending, emerging utilization trends, and state‑level variations. This page serves as the primary entry point for understanding where Medicaid dollars are flowing, how spending has evolved over time, and which provider groups drive the largest share of program costs.
 
@@ -445,14 +455,14 @@ Together, these elements provide leadership with a comprehensive, at‑a‑glanc
 
 ---
 
-## 📘 12.2 Page 2 — Provider Integrity Scorecard (peer comparison)
+## 📘 13.2 Page 2 — Provider Integrity Scorecard (peer comparison)
 **Purpose**   
 Provide a fast, searchable, benchmarking‑oriented view of Medicaid providers using enriched attributes from PROVIDER_DIM and percentile‑based risk scoring from PROVIDER_ROLE_PERCENTILE.
 This page enables users to quickly evaluate a provider’s behavior relative to peers in the same role (Billing or Servicing), without requiring drillthrough navigation.
 Unlike the drillthrough page, this Scorecard focuses on provider‑level integrity indicators
 It evaluates provider behavior relative to all other providers in the same role (Billing or Servicing).
 
-This page highlights your provider‑level enrichment, risk scoring, and integrity analytics.
+This page highlights provider‑level enrichment, risk scoring, and integrity analytics.
 ⭐ Why This Page Exists (and Why It’s Different From Drillthrough)
 
 ✔ Provider Integrity Scorecard (Page 2)
@@ -493,7 +503,7 @@ It determines:
 Derived from:
 - `PROVIDER_ROLE_PERCENTILE[PAID_AMOUNT_PERCENTILE]`
 - Role‑aware percentile logic
-- Thresholds defined in your documentation:
+- Thresholds defined in the documentation:
 
 | Percentile | Risk Tier   |
 | ---------- | ----------- |
@@ -591,7 +601,7 @@ How it works
 
 ---
 
-📘 12.3 Page 3 — Provider Drillthrough (High‑Detail Provider Profile)
+📘 13.3 Page 3 — Provider Drillthrough (High‑Detail Provider Profile)
 **Purpose**: Provide a deep‑dive diagnostic profile for a single provider selected from the Top 10 Organizations or Top 10 Individuals tables on the Executive Overview page.
 This page is not a general provider browser. It is intentionally restricted to high‑impact providers surfaced by the executive‑level Top‑N visuals.
 
@@ -677,7 +687,7 @@ This separation ensures a clean analytical workflow and prevents misuse of the d
 | **Risk Score** | Red/Orange/Green | Integrity tier |
 
 ---
-## 📘 12.4 Page 4 — HCPCS Explorer
+## 📘 13.4 Page 4 — HCPCS Explorer
 **Purpose:**   
 Provide procedure‑level analytics across all HCPCS/CPT codes, enabling deep clinical and financial insight into utilization, spend, category mix, and cost efficiency. This page is the core of the analytics solution, supporting drilldown from service categories into specific procedures.
 
@@ -792,7 +802,7 @@ This would create a seamless workflow: Service Category → HCPCS Explorer → P
 
 ---
 
-## 📘 12.5 Page 5 — Service Category Analytics
+## 📘 13.5 Page 5 — Service Category Analytics
 **Purpose:** Provide a high‑level view of Medicaid utilization and spend across the three derived service categories — OP, RX, and OTHER — enabling executives and analysts to understand category mix, cost distribution, efficiency, and trends.
 
 **Key Visuals**
@@ -835,7 +845,7 @@ Interpretation Notes
 - OP = high‑volume, moderate‑cost
 - OTHER = heterogeneous, high‑cost
 
-### Analytic Insights 
+### ⭐ Analytic Insights Enabled by Page 5
 - OTHER dominates spend
 - OP dominates utilization
 - RX is high‑volume but low‑cost
@@ -844,32 +854,20 @@ Interpretation Notes
 
 ---
 
-## 📘 12.6 Page 6 — Data Quality & Anomaly Detection
-**Purpose:** Monitor data quality issues, anomalies, and pipeline health.
+## 📘 13.6 Page 6 — Data Quality & Lineage
 
-**Key Visuals**
-- Invalid NPI Trend (`DQ_INVALID_NPI_TREND`)
-- Anomaly Flags (`DQ_INVALID_NPI_ANOMALIES`)
-- Quarantine Row Counts (from STAGE quarantine logic)
-- Data Incident Timeline
-- “Top Offenders” table (providers with repeated DQ issues)
+The Data Quality & Lineage page provides a unified view of pipeline health, anomaly behavior, and architectural transparency across the Medicaid analytics solution. 
+It brings together the actual data quality signals available in the project—Invalid NPI Trend, Anomaly Flags, and the DQ Severity Score—with concise lineage documentation that explains how these metrics are produced within the Snowflake STAGE → MODEL → STAR pipeline.
 
-This page demonstrates your data engineering rigor and DQ governance.
+The page highlights a clear pattern in invalid‑claim behavior: 2018–2020 show high invalid‑claim volumes, while 2021–2024 demonstrate a dramatic improvement, reflecting upstream corrections, stricter validation, or provider‑system changes. The Invalid NPI Trend confirms stable NPI quality over time, while the Anomaly Flags scatter chart visualizes annual invalid‑claim volume, anomaly counts, and threshold comparisons. The DQ Severity Score summarizes overall pipeline health by benchmarking invalid‑claim volume against a governance threshold of 5,000.
 
----
+Supporting text cards provide essential architectural context. 
+- The DQ Logic Summary explains what constitutes an invalid NPI, how anomalies are detected, why invalid claims dropped after 2020, and how the threshold is used to evaluate pipeline stability. 
+- The Pipeline Lineage Summary describes how data moves through Snowflake—raw ingestion in STAGE, validation and business rules in MODEL, and analytics‑ready structures in STAR—along with HCPCS taxonomy enrichment and provider‑role logic. 
+- A Versioning & Change Log documents incremental enhancements to the dashboard
+- Roadmap & Recommendations outlines future improvements such as provider‑level DQ, quarantine logging, incident tracking, anomaly scoring, and drillthrough navigation.
 
-## 📘 12.7 Page 7 — Documentation & Lineage
-**Purpose:** Provide transparency and reproducibility for stakeholders and portfolio reviewers.
-
-**Content**
-- Snowflake MODEL layer diagram
-- Star schema diagram (FACT + PROVIDER_DIM)
-- DAX conventions
-- Data sources
-- Versioning & Change Log
-- S2T summary
-
-This page reinforces the professionalism and completeness of the analytics solution.
+Together, this consolidated page serves as both an operational DQ monitor and a transparent architectural reference, giving stakeholders and reviewers a complete, self‑contained understanding of how data quality is measured, validated, and governed within the analytics pipeline.
 
 ---
 
@@ -912,6 +910,8 @@ Usage in Power BI
 | 1.1     | 2026‑05‑19 | Mairilyn | Added Data Completeness KPI, Full‑Month Filtering logic, and updated Paid Amount Trend to exclude incomplete months |
 | 1.2     | 2026‑05‑22 | Mairilyn | Added Provider_Role_Percentile and relationship to Provider_DIM|
 | 2.0     | 2026‑07‑10 | Mairilyn | Added completed documenantation of the 5 main dashboards in Power BI|
+| 2.1     | 2026‑08‑28 | Mairilyn | Added completed documenantation of last dasboard pages - 6. Data Quality & Lineage
+
 
 ---
 
