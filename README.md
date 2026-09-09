@@ -74,7 +74,8 @@ medicaid_claims_analytics/
 │   ├── 17_legacy_servicing_provider_registry.md  # Registry of A-/M-prefix and non‑NPI servicing IDs with categories and claim volume
 │   ├── 18_dq_dashboard_spec.md                   # Power BI specification for DQ trend, anomaly detection, and provider integrity visuals
 │   ├── 19_dq_anomaly_detection.md                # Documentation of 3‑sigma anomaly logic for invalid NPI spikes/drops
-│   └── 20_model_data_dictionary.md               # Full data dictionary for all MODEL-layer tables
+│   ├── 20_dq_anomaly_detection.md                # Full data dictionary for all MODEL-layer tables 
+│   └── 21_hcpcs_taxonomy_mapping.md              # Documentation of logic to classify every HCPCS code into a human-readable category
 │
 ├── sql/
 │   ├── ── Medicaid Pipeline ──────────────────────────
