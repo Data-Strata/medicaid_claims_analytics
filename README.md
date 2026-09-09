@@ -353,7 +353,7 @@ The Medicaid Provider Spending dashboard is organized into **six pages**, each a
    OP / RX / OTHER category insights and trends.
 
 6. **Data Quality & Lineage**  
-   Invalid NPI trends, anomaly flags, star schema, versioning, roadmap and technical recommendations.
+   Invalid NPI trends, anomaly flags, versioning, roadmap and technical recommendations.
 
 This structure provides a complete narrative:  
 **Overview → Provider Integrity → Clinical Utilization → Category Insights → Data Quality & Documentation.**
@@ -361,32 +361,32 @@ This structure provides a complete narrative:
 
 ## ⭐ Project Insights & Recommendations
 
-This project demonstrates how data quality signals, semantic modeling, and lineage documentation can be combined to reveal meaningful operational behavior across a large‑scale Medicaid analytics pipeline. 
-The Invalid NPI Trend and Anomaly Flags visuals highlight a clear historical pattern: invalid‑claim volumes were extremely high from 2018–2020, followed by a dramatic improvement beginning in 2021. This shift suggests upstream corrections, stricter provider validation, or system‑level changes that stabilized NPI quality. 
+This project demonstrates how data quality signals, semantic modeling, and lineage documentation can be combined to reveal meaningful operational behavior across a large‑scale Medicaid analytics pipeline.
+The Invalid NPI Trend and Anomaly Flags visuals highlight a clear historical pattern: invalid‑claim volumes were elevated and volatile from 2018 through 2019, then dropped sharply starting around 2020–2021 and have stayed low since. This shift suggests upstream corrections, stricter provider validation, or system‑level changes that stabilized NPI quality — the exact driver hasn't been isolated yet.
 The DQ Severity Score benchmarks invalid‑claim volume against a governance threshold, providing a simple, interpretable indicator of pipeline health.
 
-The consolidated Data Quality & Lineage page makes the dashboard self‑contained by pairing DQ metrics with architectural context. It explains how NPI validation, anomaly detection, and business rules are applied in the Snowflake MODEL layer, and how the STAR schema supports downstream analytics. This transparency helps reviewers understand not only what the dashboard shows, but how the underlying data is governed, validated, and transformed.
+The consolidated Data Quality & Lineage page makes the dashboard self‑contained by pairing DQ metrics with architectural context. It explains how NPI validation, anomaly detection, and business rules are applied in the Snowflake MODEL layer, how HCPCS codes are classified across every code system present in the claims data, and how the STAR schema supports downstream analytics. This transparency helps reviewers understand not only what the dashboard shows, but how the underlying data is governed, validated, and transformed.
 
-Recommendations & Future Enhancements
-To expand the project’s governance capabilities and analytical depth, the following enhancements are recommended:
+### Recommendations & Future Enhancements
+To expand the project's governance capabilities and analytical depth, the following enhancements are recommended:
 
-Data Quality Enhancements
-- Add provider‑level DQ metrics to identify recurring offenders.
-- Introduce STAGE‑level quarantine logs (invalid HCPCS, missing fields, referential failures).
-- Implement incident tracking with timestamps, severity, and resolution status.
+#### Data Quality Enhancements
+
+- Extend provider‑level DQ tracking over time. The Provider Integrity Scorecard already surfaces top invalid servicing identifiers by claim volume; the gap is tracking repeat offenders across months and years, not building this from scratch.
+- Surface the existing STAGE‑level quarantine log in the dashboard. Malformed rows are already captured with timestamp, source file, and error category on every load — this data just isn't visualized yet.
+- Implement structured incident tracking with timestamps, severity, and resolution status, so future incidents don't require a new one‑off report each time.
 - Expand DQ rules beyond NPIs (HCPCS, dates, state codes, taxonomy mismatches).
 
-Pipeline & Modeling Enhancements
+#### Pipeline & Modeling Enhancements
+
 - Add drillthrough from category → HCPCS → provider detail.
 - Introduce forecasting (ARIMA/Prophet) for category‑level spend and utilization.
 - Add DQ SLA compliance metrics for ingestion timeliness and validation coverage.
 - Expand STAR schema with additional dimensions (Facility, Claim Type).
 - Add a composite DQ Health Score combining multiple DQ signals.
 
-Documentation Enhancements
-- Expand the change log for schema updates, rule changes, and dashboard enhancements.
-
-
+#### Documentation Enhancements
+Continue expanding the change log for schema updates, rule changes, and dashboard enhancements.
 
 ## 🚀 Project Status
 ```markup
