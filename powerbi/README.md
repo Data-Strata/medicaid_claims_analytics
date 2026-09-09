@@ -19,6 +19,13 @@ The PBIX is large due to:
 
 GitHub is not designed for multi‑GB BI artifacts, so the PBIX cannot be uploaded directly.
 
+### 📥 Download the Full PBIX
+The full dashboard.pbix file is hosted externally and available here:
+
+🔗 [Download dashboard.pbix](https://drive.google.com/file/d/1dfZgj8U4_Z8KEndJ1Xdirn8fOTjlkc6T/view?usp=sharing)
+
+This is an Import‑mode model — all data is embedded directly in the file. No Snowflake connection or credentials are required to open it; anyone with Power BI Desktop can download it and browse every page, visual, and DAX measure exactly as built.
+
 ## 📊 Included Dashboard Assets
 To ensure transparency, reproducibility, and portfolio‑readiness, this folder includes:
 
