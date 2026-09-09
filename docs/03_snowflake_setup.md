@@ -23,7 +23,7 @@ The project uses a three‑layer warehouse architecture:
 
 🟦 3. Warehouse
 ```Code
-Warehouse: WH_MEDICAID_ETL
+Warehouse: COMPUTE_WH
 Size: XSMALL
 Purpose: Ingestion + transforms
 Auto-suspend: 60 seconds
@@ -258,7 +258,8 @@ Step 4 — Provide credentials
 
 - Private Key:
 Use Browse… to select rsa_key.p8
-OR paste the full private key block (browser-style UI)
+OR paste the full private key block (browser-style UI).
+Remember to include `-----BEGIN PRIVATE KEY-----` & `-----END PRIVATE KEY-----`
 
 - Passphrase: leave blank (unless encrypted)
 
